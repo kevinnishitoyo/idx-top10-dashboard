@@ -86,7 +86,8 @@ exactly as the file gives them).
 ## macOS setup
 
 ```bash
-cd "/Users/kevinnishitoyo/Desktop/STAR/samuel-stock-pipeline-yfinance"
+git clone https://github.com/kevinnishitoyo/idx-top10-dashboard.git
+cd idx-top10-dashboard
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -103,7 +104,8 @@ virtual environment is active.
 Copy this folder without a Mac `.venv` directory. In Command Prompt:
 
 ```cmd
-cd C:\path\to\samuel-stock-pipeline-yfinance
+git clone https://github.com/kevinnishitoyo/idx-top10-dashboard.git
+cd idx-top10-dashboard
 py -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
