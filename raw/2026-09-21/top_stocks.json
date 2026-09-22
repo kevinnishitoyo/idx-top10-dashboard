@@ -1,0 +1,128 @@
+{
+  "report_date": "2026-09-21",
+  "ranking_source": "IDX Stock Summary (963 stocks on 2026-09-21)",
+  "universe_size": 46,
+  "min_avg_value_20d": 5000000000,
+  "rows": [
+    {
+      "rank": 1,
+      "code": "AMMN",
+      "close": 4660.0,
+      "volume": 93461600,
+      "value": 441919460000,
+      "frequency": 27870,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Amman Mineral Internasional Tbk."
+    },
+    {
+      "rank": 2,
+      "code": "BBCA",
+      "close": 6225.0,
+      "volume": 69914100,
+      "value": 436969230000,
+      "frequency": 18244,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Central Asia Tbk."
+    },
+    {
+      "rank": 3,
+      "code": "ANTM",
+      "close": 3240.0,
+      "volume": 108664300,
+      "value": 358115177000,
+      "frequency": 24731,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "ANTAM (Persero) Tbk."
+    },
+    {
+      "rank": 4,
+      "code": "BUMI",
+      "close": 192.0,
+      "volume": 1812953700,
+      "value": 351976529700,
+      "frequency": 36119,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bumi Resources Tbk."
+    },
+    {
+      "rank": 5,
+      "code": "TPIA",
+      "close": 1880.0,
+      "volume": 181223400,
+      "value": 341688584000,
+      "frequency": 25910,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Chandra Asri Pacific Tbk."
+    },
+    {
+      "rank": 6,
+      "code": "BBRI",
+      "close": 3300.0,
+      "volume": 102594200,
+      "value": 337759369000,
+      "frequency": 22530,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Rakyat Indonesia (Persero) Tbk."
+    },
+    {
+      "rank": 7,
+      "code": "BMRI",
+      "close": 4200.0,
+      "volume": 74720000,
+      "value": 315257706000,
+      "frequency": 24643,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Mandiri (Persero) Tbk."
+    },
+    {
+      "rank": 8,
+      "code": "TINS",
+      "close": 4900.0,
+      "volume": 63138200,
+      "value": 308341865000,
+      "frequency": 15561,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "TIMAH (Persero) Tbk."
+    },
+    {
+      "rank": 9,
+      "code": "BULL",
+      "close": 404.0,
+      "volume": 622808100,
+      "value": 253091231600,
+      "frequency": 32071,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Buana Lintas Lautan Tbk."
+    },
+    {
+      "rank": 10,
+      "code": "SQMI",
+      "close": 109.0,
+      "volume": 1800324500,
+      "value": 200162310500,
+      "frequency": 51241,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Wilton Makmur Indonesia Tbk."
+    }
+  ]
+}

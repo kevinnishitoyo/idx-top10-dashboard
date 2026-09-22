@@ -1,0 +1,12 @@
+.venv/
+.env
+__pycache__/
+.cache/
+*.pyc
+*.bak
+.DS_Store
+.fuse_hidden*
+data/*.db-shm
+data/*.db-wal
+logs/*.log
+public/
