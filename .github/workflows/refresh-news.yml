@@ -1,0 +1,60 @@
+name: Refresh dashboard news
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Hourly from 08:23 through 21:23 WIB (UTC+7), Monday-Friday.
+    - cron: "23 1-14 * * 1-5"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  refresh-news-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install news dependency
+        run: python -m pip install "requests>=2.31,<3"
+
+      - name: Refresh matching news
+        run: python news.py
+
+      - name: Validate generated dashboard
+        run: python scripts/validate_dashboard.py
+
+      - name: Prepare website
+        run: |
+          mkdir -p public
+          cp reports/dashboard.html public/index.html
+          touch public/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4

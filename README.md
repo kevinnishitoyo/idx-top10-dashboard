@@ -151,6 +151,11 @@ The included `.github/workflows/daily-dashboard.yml` refreshes and publishes the
 dashboard at 18:15 WIB every Monday-Friday. It can also be started manually from
 the repository's Actions page.
 
+The lighter `.github/workflows/refresh-news.yml` updates only the matching news
+headlines every hour from 08:23 through 21:23 WIB on weekdays. It republishes
+the same dashboard URL without recalculating the market table. A browser page
+that is already open must be reloaded to display the newly published headlines.
+
 1. Push this project to a public GitHub repository.
 2. Open **Settings → Pages** in that repository.
 3. Under **Build and deployment**, choose **GitHub Actions** as the source.
