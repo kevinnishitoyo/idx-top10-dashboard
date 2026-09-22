@@ -26,10 +26,13 @@ Run after **17:00 WIB**. A bar dated today is ignored before then, because
 Yahoo's current-day bar updates during trading; the report always covers the
 last completed session.
 
-Run `python idx_summary.py --show-headers` once to see which columns were
-detected in the IDX file, and confirm the units of Foreign Buy / Foreign Sell
-(IDX has published these as value in some periods; the pipeline stores them
-exactly as the file gives them).
+Run `python idx_summary.py --show-headers` to see which columns and foreign-flow
+units were detected. Explicit volume/share headers are stored as shares and
+converted to estimated rupiah with VWAP; explicit value/IDR headers are stored
+directly as rupiah. Generic `Foreign Buy` / `Foreign Sell` headers are accepted
+as shares only while every populated row passes strict volume checks. If the
+format changes or the units are ambiguous, import fails instead of publishing
+silently incorrect foreign-flow figures.
 
 ## Which questions this answers
 

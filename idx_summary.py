@@ -81,8 +81,11 @@ def create_schema(connection: sqlite3.Connection) -> None:
             foreign_buy INTEGER,
             foreign_sell INTEGER,
             foreign_net INTEGER,
+            foreign_buy_value INTEGER,
+            foreign_sell_value INTEGER,
             vwap REAL,
             foreign_net_value INTEGER,
+            foreign_unit TEXT,
             source_file TEXT NOT NULL,
             ingested_at TEXT NOT NULL,
             PRIMARY KEY (stock_code, trade_date)
@@ -92,7 +95,12 @@ def create_schema(connection: sqlite3.Connection) -> None:
     )
     existing = {row[1] for row in connection.execute("PRAGMA table_info(idx_summary)")}
     for column, ddl in (
-        ("company", "TEXT"), ("vwap", "REAL"), ("foreign_net_value", "INTEGER"),
+        ("company", "TEXT"),
+        ("vwap", "REAL"),
+        ("foreign_buy_value", "INTEGER"),
+        ("foreign_sell_value", "INTEGER"),
+        ("foreign_net_value", "INTEGER"),
+        ("foreign_unit", "TEXT"),
     ):
         if column not in existing:
             connection.execute(f"ALTER TABLE idx_summary ADD COLUMN {column} {ddl}")
@@ -171,6 +179,92 @@ def to_number(value) -> float | None:
         return None
 
 
+def foreign_header_unit(header: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9]+", " ", header.lower()).strip()
+    if any(term in normalized.split() for term in ("value", "nilai", "idr", "rupiah")):
+        return "idr"
+    if any(
+        term in normalized.split()
+        for term in ("volume", "share", "shares", "saham", "lembar")
+    ):
+        return "shares"
+    return None
+
+
+def detect_foreign_unit(
+    frame: pd.DataFrame, mapping: dict[str, str], source_name: str
+) -> str | None:
+    """Classify foreign buy/sell as shares or IDR, refusing unsafe guesses."""
+    has_buy = "foreign_buy" in mapping
+    has_sell = "foreign_sell" in mapping
+    if not has_buy and not has_sell:
+        return None
+    if has_buy != has_sell:
+        raise RuntimeError(
+            f"{source_name}: found only one foreign buy/sell column; refusing partial flow"
+        )
+
+    buy_header = mapping["foreign_buy"]
+    sell_header = mapping["foreign_sell"]
+    buy_unit = foreign_header_unit(buy_header)
+    sell_unit = foreign_header_unit(sell_header)
+    explicit_units = {unit for unit in (buy_unit, sell_unit) if unit is not None}
+    if len(explicit_units) > 1:
+        raise RuntimeError(
+            f"{source_name}: foreign headers disagree on units: "
+            f"{buy_header!r}, {sell_header!r}"
+        )
+    explicit_unit = next(iter(explicit_units), None)
+
+    checked = 0
+    share_plausible = True
+    idr_plausible = True
+    for _, row in frame.iterrows():
+        buy = to_number(row[buy_header])
+        sell = to_number(row[sell_header])
+        if buy is None and sell is None:
+            continue
+        if buy is None or sell is None:
+            raise RuntimeError(
+                f"{source_name}: a row has only one foreign buy/sell value"
+            )
+        if buy < 0 or sell < 0:
+            raise RuntimeError(f"{source_name}: foreign buy/sell cannot be negative")
+        checked += 1
+
+        volume = to_number(row[mapping["volume"]]) if "volume" in mapping else None
+        value = to_number(row[mapping["value"]])
+        if volume is None or volume < 0 or buy > volume or sell > volume:
+            share_plausible = False
+        if value is None or value < 0 or buy > value * 1.05 or sell > value * 1.05:
+            idr_plausible = False
+
+    if checked == 0:
+        return None
+    if explicit_unit == "shares":
+        if not share_plausible:
+            raise RuntimeError(
+                f"{source_name}: share-labelled foreign buy/sell exceeds total volume"
+            )
+        return "shares"
+    if explicit_unit == "idr":
+        if not idr_plausible:
+            raise RuntimeError(
+                f"{source_name}: IDR-labelled foreign buy/sell exceeds turnover"
+            )
+        return "idr"
+
+    # IDX's current generic Foreign Buy/Sell headers contain share volumes.
+    # Accept that format only while every populated row satisfies the strict
+    # share-volume relationship. A future value-format change will fail closed.
+    if share_plausible:
+        return "shares"
+    raise RuntimeError(
+        f"{source_name}: generic Foreign Buy/Sell headers are not plausible share "
+        "volumes; add explicit unit mapping before importing this file"
+    )
+
+
 def ingest_file(
     connection: sqlite3.Connection, path: Path, show_headers: bool
 ) -> tuple[str | None, int]:
@@ -187,6 +281,10 @@ def ingest_file(
             f"{path.name}: could not find column(s) for {', '.join(missing)}. "
             f"Headers seen: {columns}"
         )
+
+    foreign_unit = detect_foreign_unit(frame, mapping, path.name)
+    if show_headers:
+        logging.info("%s foreign-flow unit: %s", path.name, foreign_unit or "unavailable")
 
     trade_date = date_from_name(path.name)
     date_column = next(
@@ -218,12 +316,20 @@ def ingest_file(
             continue
         buy = to_number(row[mapping["foreign_buy"]]) if "foreign_buy" in mapping else None
         sell = to_number(row[mapping["foreign_sell"]]) if "foreign_sell" in mapping else None
-        net = None if buy is None or sell is None else buy - sell
         volume = to_number(row[mapping["volume"]]) if "volume" in mapping else None
-        # IDX reports Foreign Buy/Sell as SHARE VOLUMES. VWAP (value / volume)
-        # converts the net into an approximate rupiah figure.
         vwap = value / volume if volume else None
-        net_value = None if net is None or vwap is None else net * vwap
+        raw_net = None if buy is None or sell is None else buy - sell
+        if foreign_unit == "shares":
+            share_buy, share_sell, share_net = buy, sell, raw_net
+            buy_value = None if buy is None or vwap is None else buy * vwap
+            sell_value = None if sell is None or vwap is None else sell * vwap
+            net_value = None if raw_net is None or vwap is None else raw_net * vwap
+        elif foreign_unit == "idr":
+            share_buy = share_sell = share_net = None
+            buy_value, sell_value, net_value = buy, sell, raw_net
+        else:
+            share_buy = share_sell = share_net = None
+            buy_value = sell_value = net_value = None
         records.append(
             (
                 code,
@@ -233,11 +339,14 @@ def ingest_file(
                 None if volume is None else int(volume),
                 int(value),
                 int(to_number(row[mapping["frequency"]]) or 0) if "frequency" in mapping else None,
-                None if buy is None else int(buy),
-                None if sell is None else int(sell),
-                None if net is None else int(net),
+                None if share_buy is None else int(share_buy),
+                None if share_sell is None else int(share_sell),
+                None if share_net is None else int(share_net),
+                None if buy_value is None else int(buy_value),
+                None if sell_value is None else int(sell_value),
                 vwap,
                 None if net_value is None else int(net_value),
+                foreign_unit,
                 path.name,
                 now,
             )
@@ -250,9 +359,10 @@ def ingest_file(
         """
         INSERT INTO idx_summary (
             stock_code, trade_date, company, close, volume, value, frequency,
-            foreign_buy, foreign_sell, foreign_net, vwap, foreign_net_value,
+            foreign_buy, foreign_sell, foreign_net, foreign_buy_value,
+            foreign_sell_value, vwap, foreign_net_value, foreign_unit,
             source_file, ingested_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(stock_code, trade_date) DO UPDATE SET
             company=excluded.company,
             close=excluded.close,
@@ -262,15 +372,18 @@ def ingest_file(
             foreign_buy=excluded.foreign_buy,
             foreign_sell=excluded.foreign_sell,
             foreign_net=excluded.foreign_net,
+            foreign_buy_value=excluded.foreign_buy_value,
+            foreign_sell_value=excluded.foreign_sell_value,
             vwap=excluded.vwap,
             foreign_net_value=excluded.foreign_net_value,
+            foreign_unit=excluded.foreign_unit,
             source_file=excluded.source_file,
             ingested_at=excluded.ingested_at
         """,
         records,
     )
     connection.commit()
-    has_foreign = any(record[9] is not None for record in records)
+    has_foreign = any(record[13] is not None for record in records)
     if not has_foreign:
         logging.warning(
             "%s: no foreign buy/sell columns detected - foreign flow will stay empty",
@@ -328,7 +441,7 @@ def main() -> int:
             )
         if failed:
             logging.warning("%s file(s) failed: %s", len(failed), " | ".join(failed))
-        return 0 if loaded else 1
+        return 1 if failed or not loaded else 0
     finally:
         connection.close()
 

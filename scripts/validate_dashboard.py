@@ -27,6 +27,102 @@ def ordered_unique(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
 
 
+def numeric(row: dict[str, str], column: str) -> float | None:
+    value = (row.get(column) or "").strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise SystemExit(
+            f"{row.get('stock_code', '?')}: invalid number in {column}: {value!r}"
+        ) from exc
+
+
+def idx_tick_size(price: float) -> int:
+    if price < 200:
+        return 1
+    if price < 500:
+        return 2
+    if price < 2_000:
+        return 5
+    if price < 5_000:
+        return 10
+    return 25
+
+
+def valid_idx_price(price: float) -> bool:
+    tick = idx_tick_size(price)
+    return price > 0 and abs(price / tick - round(price / tick)) < 1e-9
+
+
+def validate_report_row(row: dict[str, str]) -> None:
+    code = (row.get("stock_code") or "?").strip().upper()
+    report_date = (row.get("date") or "").strip()
+    price_date = (row.get("ohlcv_date") or "").strip()
+    if price_date != report_date:
+        raise SystemExit(
+            f"{code}: price date {price_date!r} does not match report date {report_date!r}"
+        )
+
+    volume = numeric(row, "volume")
+    foreign_buy = numeric(row, "foreign_buy_1d_shares")
+    foreign_sell = numeric(row, "foreign_sell_1d_shares")
+    foreign_net_value = numeric(row, "foreign_net_1d_idr")
+    turnover = numeric(row, "transaction_value")
+    foreign_unit = (row.get("foreign_unit_1d") or "").strip().lower()
+
+    if foreign_net_value is not None and foreign_unit not in ("shares", "idr"):
+        raise SystemExit(f"{code}: foreign flow is missing a recognized source unit")
+    if foreign_unit == "shares" and (foreign_buy is None or foreign_sell is None):
+        raise SystemExit(f"{code}: share-based foreign flow is missing share values")
+    if foreign_unit == "idr" and (foreign_buy is not None or foreign_sell is not None):
+        raise SystemExit(f"{code}: IDR foreign flow was incorrectly exposed as shares")
+
+    for label, value in (("foreign buy", foreign_buy), ("foreign sell", foreign_sell)):
+        if value is not None and value < 0:
+            raise SystemExit(f"{code}: {label} cannot be negative")
+        if value is not None and volume is not None and value > volume:
+            raise SystemExit(
+                f"{code}: {label} exceeds total volume; foreign-flow units may be wrong"
+            )
+
+    if (
+        foreign_net_value is not None
+        and turnover is not None
+        and abs(foreign_net_value) > turnover * 1.05
+    ):
+        raise SystemExit(
+            f"{code}: foreign net value exceeds turnover; foreign-flow units may be wrong"
+        )
+
+    sessions = numeric(row, "foreign_sessions_5d") or 0
+    if numeric(row, "foreign_net_3d_idr") is not None and sessions < 3:
+        raise SystemExit(f"{code}: 3-day flow has fewer than 3 covered sessions")
+    if numeric(row, "foreign_net_5d_idr") is not None and sessions < 5:
+        raise SystemExit(f"{code}: 5-day flow has fewer than 5 covered sessions")
+
+    setup = row.get("setup") or ""
+    if not setup.startswith(("Breakout", "Pullback")):
+        return
+
+    entry = numeric(row, "entry")
+    stop = numeric(row, "stop")
+    target = numeric(row, "target")
+    if entry is None or stop is None or target is None:
+        raise SystemExit(f"{code}: active setup is missing a trade level")
+
+    for label, price in (("entry", entry), ("stop", stop), ("target", target)):
+        if not valid_idx_price(price):
+            raise SystemExit(f"{code}: {label} {price:g} is not on a valid IDX tick")
+    if stop >= entry:
+        raise SystemExit(f"{code}: stop must be below entry")
+    if target <= entry:
+        raise SystemExit(f"{code}: target must be above entry")
+    if (target - entry) / (entry - stop) < 2 - 1e-9:
+        raise SystemExit(f"{code}: reward-to-risk is below 2.0")
+
+
 def main() -> None:
     report_rows = read_rows(LATEST_REPORT)
     news_rows = read_rows(LATEST_NEWS)
@@ -34,6 +130,11 @@ def main() -> None:
         raise SystemExit(f"Expected 10 report rows, found {len(report_rows)}")
 
     report_codes = [row.get("stock_code", "").strip().upper() for row in report_rows]
+    if any(not code for code in report_codes) or len(set(report_codes)) != len(report_codes):
+        raise SystemExit(f"Report contains a blank or duplicate ticker: {report_codes}")
+    for row in report_rows:
+        validate_report_row(row)
+
     news_codes = ordered_unique(
         [row.get("stock_code", "").strip().upper() for row in news_rows]
     )

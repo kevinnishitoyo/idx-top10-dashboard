@@ -87,6 +87,62 @@ def load_companies() -> dict[str, dict[str, list[str] | str]]:
     return companies
 
 
+def add_report_company_fallbacks(
+    connection: sqlite3.Connection,
+    companies: dict[str, dict[str, list[str] | str]],
+    report_date: str,
+    codes: list[str],
+) -> list[str]:
+    """Fill missing company names from the generated report or IDX summary.
+
+    companies.csv remains the preferred source because it can provide curated
+    aliases. Official IDX rankings can contain any listed stock, though, so a
+    newly appearing top-10 name must not fall back to a ticker-only news search.
+    """
+    report_names: dict[str, str] = {}
+    if LATEST_REPORT_CSV.exists():
+        with LATEST_REPORT_CSV.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                if (row.get("date") or "").strip() != report_date:
+                    continue
+                code = (row.get("stock_code") or "").strip().upper()
+                name = (row.get("company") or "").strip()
+                if code and name:
+                    report_names[code] = name
+
+    if codes:
+        placeholders = ",".join("?" for _ in codes)
+        try:
+            idx_names = connection.execute(
+                f"""
+                SELECT stock_code, company
+                FROM idx_summary
+                WHERE trade_date=? AND stock_code IN ({placeholders})
+                """,
+                (report_date, *codes),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            idx_names = []
+        for code, name in idx_names:
+            if code and name:
+                report_names.setdefault(str(code).strip().upper(), str(name).strip())
+
+    added = []
+    for code in codes:
+        existing = companies.get(code)
+        if existing and existing.get("name"):
+            continue
+        name = report_names.get(code, "")
+        if not name:
+            continue
+        if existing:
+            existing["name"] = name
+        else:
+            companies[code] = {"name": name, "aliases": []}
+        added.append(code)
+    return added
+
+
 def create_schema(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -358,6 +414,14 @@ def main() -> int:
         create_schema(connection)
         report_date, codes = latest_top_stocks(connection, args.date)
         companies = load_companies()
+        fallback_codes = add_report_company_fallbacks(
+            connection, companies, report_date, codes
+        )
+        if fallback_codes:
+            logging.info(
+                "Using report/IDX company names for tickers missing from companies.csv: %s",
+                ", ".join(fallback_codes),
+            )
         session = requests.Session()
         session.headers["User-Agent"] = "Mozilla/5.0 (samuel-stock-pipeline news)"
 
@@ -365,7 +429,11 @@ def main() -> int:
         for code in codes:
             company = companies.get(code)
             if company is None:
-                logging.warning("%s not in companies.csv; searching by code only (noisier)", code)
+                logging.warning(
+                    "%s has no company name in companies.csv, the report, or IDX; "
+                    "searching by code only (noisier)",
+                    code,
+                )
             try:
                 items = news_for_stock(session, code, company)
                 save_news(connection, code, report_date, items)
