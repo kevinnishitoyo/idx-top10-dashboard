@@ -23,6 +23,7 @@ Methodology notes
 
 from __future__ import annotations
 
+import math
 import csv
 import json
 import logging
@@ -432,7 +433,7 @@ def update_ohlcv(
         logging.info("%s is new; requesting the initial OHLCV backfill", stock_code)
     else:
         latest_date = datetime.strptime(latest, "%Y-%m-%d").date()
-        start_date = min(latest_date, report_date) - timedelta(days=7)
+        start_date = min(latest_date, report_date) - timedelta(days=550)
 
     prices = yf.download(
         f"{stock_code}.JK",
@@ -596,6 +597,38 @@ def calculate_price_metrics(
     metrics.update(scenario)
     return metrics
 
+def idx_tick_size(price: float) -> int:
+    """Regular-market IDX tick size for a given price."""
+    if price < 200:
+        return 1
+    if price < 500:
+        return 2
+    if price < 2_000:
+        return 5
+    if price < 5_000:
+        return 10
+    return 25
+
+
+def round_idx_price(price: float, direction: str) -> int:
+    """Round a calculated level onto a valid IDX regular-market price."""
+    if not math.isfinite(price) or price <= 0:
+        raise ValueError(f"Invalid IDX price: {price}")
+
+    tick = idx_tick_size(price)
+
+    if direction == "up":
+        return int(math.ceil((price - 1e-9) / tick) * tick)
+    if direction == "down":
+        return int(math.floor((price + 1e-9) / tick) * tick)
+
+    raise ValueError("direction must be 'up' or 'down'")
+
+
+def is_valid_idx_price(price: float) -> bool:
+    """Return True when price is on a valid regular-market tick."""
+    tick = idx_tick_size(price)
+    return price > 0 and abs(price / tick - round(price / tick)) < 1e-9
 
 def trade_scenario(
     trend: str,
@@ -631,19 +664,30 @@ def trade_scenario(
         return {**blank, "setup": "No setup (ATR needs 14 sessions)"}
 
     def priced(setup: str, entry: float, stop: float) -> dict[str, Any]:
-        risk = entry - stop
-        if risk <= 0:
-            return {**blank, "setup": "No setup (stop would sit at or above entry)"}
-        target = entry + 2 * risk
+        rounded_entry = round_idx_price(entry, "up")
+        rounded_stop = round_idx_price(stop, "down")
+
+        risk = rounded_entry - rounded_stop
+        if rounded_stop <= 0 or risk <= 0:
+            return {
+                **blank,
+                "setup": "No setup (stop would sit at or above entry)",
+            }
+
+        unrounded_target = rounded_entry + 2 * risk
+        rounded_target = round_idx_price(unrounded_target, "up")
+
         return {
             "setup": setup,
-            "entry": entry,
-            "stop": stop,
-            "target": target,
-            "distance_to_entry": entry / close - 1,
+            "entry": rounded_entry,
+            "stop": rounded_stop,
+            "target": rounded_target,
+            "distance_to_entry": rounded_entry / close - 1,
             "risk_per_share": risk,
-            "risk_pct_of_entry": risk / entry,
-            "reward_to_risk": (target - entry) / risk,
+            "risk_pct_of_entry": risk / rounded_entry,
+            "reward_to_risk": (
+                rounded_target - rounded_entry
+            ) / risk,
         }
 
     # 1. Breakout: at or near the prior high.
@@ -702,6 +746,7 @@ def calculate_flow_metrics(
         "foreign_net_3d_idr": None,
         "foreign_net_5d_idr": None,
         "foreign_sessions_5d": 0,
+        "foreign_unit_1d": None,
     }
     if not table_exists(connection, "idx_summary"):
         return empty
@@ -713,7 +758,8 @@ def calculate_flow_metrics(
         row[0]: row[1:]
         for row in connection.execute(
             f"""
-            SELECT trade_date, foreign_buy, foreign_sell, foreign_net, foreign_net_value
+            SELECT trade_date, foreign_buy, foreign_sell, foreign_net,
+                   foreign_net_value, foreign_unit
             FROM idx_summary
             WHERE stock_code=? AND trade_date IN ({placeholders})
             """,
@@ -723,7 +769,7 @@ def calculate_flow_metrics(
     if not stored:
         return empty
 
-    blank = (None, None, None, None)
+    blank = (None, None, None, None, None)
 
     def window_sum(count: int) -> int | None:
         """Rupiah estimate of net foreign flow; blank unless every session is present."""
@@ -743,6 +789,7 @@ def calculate_flow_metrics(
         "foreign_sessions_5d": sum(
             1 for day in sessions if stored.get(day, blank)[3] is not None
         ),
+        "foreign_unit_1d": today[4],
     }
 
 
@@ -1358,7 +1405,13 @@ def main() -> None:
         logging.exception("Pipeline failed")
         raise
     finally:
-        connection.close()
+        try:
+            connection.commit()
+            checkpoint = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            if checkpoint and checkpoint[0] != 0:
+                raise RuntimeError(f"SQLite WAL checkpoint remained busy: {checkpoint}")
+        finally:
+            connection.close()
 
 
 if __name__ == "__main__":
