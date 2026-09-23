@@ -56,10 +56,12 @@ MIN_AVG_VALUE_20D = 5_000_000_000  # Rp; skip stocks too thin to trade
 FLOW_SESSIONS = 5
 MIN_IDX_ROWS = 50                # below this the IDX file looks partial
 BREAKOUT_PROXIMITY = 0.03        # breakout setup: within 3% of prior-20d resistance
+BREAKOUT_MAX_EXTENSION_ATR = 0.5 # do not chase more than half an ATR above resistance
 LEVEL_PROXIMITY_ATR = 0.5        # a test must sit within half an ATR of its level
-SUPPORT_STOP_BUFFER_ATR = 0.5    # pullback stops sit this far below support
+SUPPORT_STOP_BUFFER_ATR = 0.5    # stops sit this far below the relevant swing low
 BREAKOUT_STOP_BUFFER_ATR = 1.0   # breakout stop sits below the former resistance
-MIN_REWARD_TO_RISK = 1.5         # reject setups with too little room to resistance
+MIN_RR_TO_RESISTANCE = 1.0       # first target must at least match the initial risk
+CORPORATE_ACTION_RATIO_SHIFT = 0.02
 
 
 def ensure_directories() -> None:
@@ -253,7 +255,7 @@ def idx_coverage(connection: sqlite3.Connection, report_date: date) -> int:
 def rank_from_idx(
     connection: sqlite3.Connection, report_date: date
 ) -> list[dict[str, Any]]:
-    """Official top 10 by transaction value from the ingested IDX Stock Summary."""
+    """Official top 10 by regular-market value from the ingested IDX summary."""
     rows = connection.execute(
         """
         SELECT stock_code, close, volume, value, frequency, foreign_net, company
@@ -276,7 +278,7 @@ def rank_from_idx(
                 "frequency": as_int(frequency),
                 "avg_value_20d": None,
                 "daily_change_pct": None,
-                "value_source": "IDX Stock Summary (official)",
+                "value_source": "IDX Stock Summary (official regular-market value)",
                 "company": (company or "").strip(),
             }
         )
@@ -500,6 +502,42 @@ def wilder(series: pd.Series) -> pd.Series:
     return series.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
 
 
+def calculate_rsi(close: pd.Series) -> pd.Series:
+    """Wilder RSI with defined values for one-sided and flat windows."""
+    delta = close.astype(float).diff()
+    gain = wilder(delta.clip(lower=0))
+    loss = wilder(-delta.clip(upper=0))
+    ratio = gain / loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + ratio))
+    rsi = rsi.mask((loss == 0) & (gain > 0), 100.0)
+    rsi = rsi.mask((loss == 0) & (gain == 0), 50.0)
+    return rsi
+
+
+def rising_over_sessions(series: pd.Series, sessions: int = 5) -> bool:
+    """Use a multi-session slope so a one-day rounding change cannot flip regime."""
+    if len(series) <= sessions:
+        return False
+    current = series.iloc[-1]
+    previous = series.iloc[-sessions - 1]
+    return bool(pd.notna(current) and pd.notna(previous) and current > previous)
+
+
+def classify_flow_check(
+    setup: str, one_day_share: float | None, three_day_share: float | None
+) -> str:
+    """Require material flow relative to turnover, not a positive/negative cent."""
+    if not setup.startswith(("Breakout", "Pullback")):
+        return "No trigger"
+    if one_day_share is None or three_day_share is None:
+        return "Flow unavailable"
+    if one_day_share >= 0.05 and three_day_share >= 0.05:
+        return "Flow confirms"
+    if one_day_share <= -0.05 and three_day_share <= -0.05:
+        return "Flow diverges"
+    return "Flow neutral/mixed"
+
+
 def calculate_price_metrics(
     connection: sqlite3.Connection, stock_code: str, report_date: date
 ) -> dict[str, Any]:
@@ -530,10 +568,7 @@ def calculate_price_metrics(
             return None
         return adjusted.iloc[-1] / base - 1
 
-    delta = close.diff()
-    gain = wilder(delta.clip(lower=0))
-    loss = wilder(-delta.clip(upper=0))
-    rsi14 = 100 - (100 / (1 + gain / loss.replace(0, np.nan)))
+    rsi14 = calculate_rsi(close)
 
     previous_close = close.shift(1)
     true_range = pd.concat(
@@ -557,15 +592,15 @@ def calculate_price_metrics(
     current_close = float(close.iloc[-1])
     current_ma20 = None if pd.isna(ma20.iloc[-1]) else float(ma20.iloc[-1])
     current_ma50 = None if pd.isna(ma50.iloc[-1]) else float(ma50.iloc[-1])
-    previous_ma20 = (
-        None if len(ma20) < 2 or pd.isna(ma20.iloc[-2]) else float(ma20.iloc[-2])
-    )
-    ma20_rising = (
-        current_ma20 is not None
-        and previous_ma20 is not None
-        and current_ma20 > previous_ma20
-    )
+    ma20_rising = rising_over_sessions(ma20, 5)
     current_atr = None if pd.isna(atr14.iloc[-1]) else float(atr14.iloc[-1])
+    recent_swing_low = float(low.tail(5).min()) if len(low) >= 5 else support
+    adjustment_ratio = adjusted / close.replace(0, np.nan)
+    ratio_shift = adjustment_ratio.pct_change(fill_method=None).abs().tail(50)
+    corporate_action_in_window = bool(
+        ratio_shift.notna().any()
+        and (ratio_shift > CORPORATE_ACTION_RATIO_SHIFT).any()
+    )
 
     if current_ma20 is None or current_ma50 is None:
         trend = "Insufficient history"
@@ -585,6 +620,8 @@ def calculate_price_metrics(
         current_ma20,
         current_ma50,
         ma20_rising,
+        recent_swing_low,
+        corporate_action_in_window,
     )
 
     metrics = {
@@ -596,6 +633,8 @@ def calculate_price_metrics(
         "ma20": current_ma20,
         "ma50": current_ma50,
         "ma20_rising": ma20_rising,
+        "recent_swing_low_5d": recent_swing_low,
+        "corporate_action_in_window": corporate_action_in_window,
         "rsi14": None if pd.isna(rsi14.iloc[-1]) else float(rsi14.iloc[-1]),
         "atr14": current_atr,
         "atr_pct": None if not current_atr else current_atr / current_close,
@@ -656,12 +695,15 @@ def trade_scenario(
     ma20: float | None,
     ma50: float | None,
     ma20_rising: bool,
+    recent_swing_low: float | None = None,
+    corporate_action_in_window: bool = False,
 ) -> dict[str, Any]:
     """Pick the setup the chart actually presents and show reference levels.
 
     Breakout long: price at or near the prior-20-session high.
-    Pullback long: a confirmed rising regime testing MA20 or support. Pullback
-      stops sit below structural support and targets are capped at resistance.
+    Pullback long: a confirmed rising regime testing MA20 or support. Its stop
+      sits below the five-session swing low; prior resistance and a 2R target
+      are reported separately.
     Rows that fail the setup rules retain tick-valid reference levels, but are
     explicitly labelled ``Watch only`` rather than presented as trade signals.
     """
@@ -669,11 +711,13 @@ def trade_scenario(
         "setup": None,
         "entry": None,
         "stop": None,
+        "resistance_target": None,
         "target": None,
         "distance_to_entry": None,
         "risk_per_share": None,
         "risk_pct_of_entry": None,
         "reward_to_risk": None,
+        "reward_to_resistance": None,
         "setup_status": None,
     }
     if trend == "Insufficient history":
@@ -685,7 +729,7 @@ def trade_scenario(
         reason: str,
         entry: float,
         stop: float,
-        target: float,
+        resistance_objective: float | None = None,
     ) -> dict[str, Any]:
         """Return a non-actionable, tick-valid plan so every row remains useful."""
         rounded_entry = round_idx_price(entry, "up")
@@ -693,27 +737,41 @@ def trade_scenario(
         if rounded_stop <= 0 or rounded_stop >= rounded_entry:
             rounded_stop = round_idx_price(rounded_entry - atr, "down")
         risk = rounded_entry - rounded_stop
-        rounded_target = round_idx_price(target, "down")
-        if rounded_target <= rounded_entry:
-            rounded_target = round_idx_price(rounded_entry + 2 * risk, "down")
-        reward_to_risk = (rounded_target - rounded_entry) / risk
+        rounded_target = round_idx_price(rounded_entry + 2 * risk, "down")
+        resistance_target = None
+        if resistance_objective is not None and resistance_objective > rounded_entry:
+            resistance_target = round_idx_price(resistance_objective, "down")
         return {
             "setup": reason,
             "entry": rounded_entry,
             "stop": rounded_stop,
+            "resistance_target": resistance_target,
             "target": rounded_target,
             "distance_to_entry": rounded_entry / close - 1,
             "risk_per_share": risk,
             "risk_pct_of_entry": risk / rounded_entry,
-            "reward_to_risk": reward_to_risk,
+            # Watch-only rows keep reference prices but intentionally hide R:R;
+            # otherwise failed setups can look more attractive than valid ones.
+            "reward_to_risk": None,
+            "reward_to_resistance": None,
             "setup_status": "Watch only",
         }
+
+    swing_low = recent_swing_low if recent_swing_low is not None else support
+
+    if corporate_action_in_window:
+        return reference_levels(
+            "No setup (corporate action in 50-session window)",
+            max(close, ma20 or close),
+            swing_low - SUPPORT_STOP_BUFFER_ATR * atr,
+            resistance,
+        )
 
     if trend == "Bearish":
         return reference_levels(
             "No long setup (downtrend)",
             max(close, ma20 or close),
-            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            swing_low - SUPPORT_STOP_BUFFER_ATR * atr,
             resistance,
         )
 
@@ -721,47 +779,61 @@ def trade_scenario(
         setup: str,
         entry: float,
         stop: float,
-        target_cap: float | None = None,
+        resistance_objective: float | None = None,
     ) -> dict[str, Any]:
         rounded_entry = round_idx_price(entry, "up")
         rounded_stop = round_idx_price(stop, "down")
 
         risk = rounded_entry - rounded_stop
         if rounded_stop <= 0 or risk <= 0:
-            return {
-                **blank,
-                "setup": "No setup (stop would sit at or above entry)",
-            }
+            return reference_levels(
+                "No setup (stop would sit at or above entry)",
+                entry,
+                entry - atr,
+                resistance_objective,
+            )
 
-        target = rounded_entry + 2 * risk
-        if target_cap is not None:
-            target = min(target, target_cap)
-        rounded_target = round_idx_price(target, "down")
-        if rounded_target <= rounded_entry:
-            return {**blank, "setup": "No setup (resistance is at or below entry)"}
-
+        rounded_target = round_idx_price(rounded_entry + 2 * risk, "down")
         reward_to_risk = (rounded_target - rounded_entry) / risk
-        if reward_to_risk < MIN_REWARD_TO_RISK:
+        resistance_target = None
+        reward_to_resistance = None
+        if resistance_objective is not None and resistance_objective > rounded_entry:
+            resistance_target = round_idx_price(resistance_objective, "down")
+            reward_to_resistance = (resistance_target - rounded_entry) / risk
+        if (
+            resistance_objective is not None
+            and (reward_to_resistance is None or reward_to_resistance < MIN_RR_TO_RESISTANCE)
+        ):
             return reference_levels(
                 "No setup (insufficient room to resistance)",
                 rounded_entry,
                 rounded_stop,
-                rounded_target,
+                resistance_objective,
             )
 
         return {
             "setup": setup,
             "entry": rounded_entry,
             "stop": rounded_stop,
+            "resistance_target": resistance_target,
             "target": rounded_target,
             "distance_to_entry": rounded_entry / close - 1,
             "risk_per_share": risk,
             "risk_pct_of_entry": risk / rounded_entry,
             "reward_to_risk": reward_to_risk,
+            "reward_to_resistance": reward_to_resistance,
             "setup_status": "At trigger" if rounded_entry <= close else "Pending",
         }
 
     # 1. Breakout: at or near the prior high.
+    if close > resistance + BREAKOUT_MAX_EXTENSION_ATR * atr:
+        stop = max(
+            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            resistance - BREAKOUT_STOP_BUFFER_ATR * atr,
+        )
+        return reference_levels(
+            "No setup (extended above breakout)", close, stop, None
+        )
     if close >= resistance * (1 - BREAKOUT_PROXIMITY):
         entry = max(close, resistance)
         stop = max(support - SUPPORT_STOP_BUFFER_ATR * atr, resistance - BREAKOUT_STOP_BUFFER_ATR * atr)
@@ -774,7 +846,7 @@ def trade_scenario(
         return reference_levels(
             "No setup (below 20-session support)",
             support,
-            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            swing_low - SUPPORT_STOP_BUFFER_ATR * atr,
             resistance,
         )
 
@@ -789,11 +861,11 @@ def trade_scenario(
         return reference_levels(
             "No long setup (uptrend regime not confirmed)",
             max(close, ma20 or close),
-            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            swing_low - SUPPORT_STOP_BUFFER_ATR * atr,
             resistance,
         )
 
-    pullback_stop = support - SUPPORT_STOP_BUFFER_ATR * atr
+    pullback_stop = swing_low - SUPPORT_STOP_BUFFER_ATR * atr
 
     # 2. Pullback to MA20, distinguishing a test from a pending reclaim.
     if ma20 is not None and abs(close - ma20) <= LEVEL_PROXIMITY_ATR * atr:
@@ -826,14 +898,11 @@ def trade_scenario(
         support - SUPPORT_STOP_BUFFER_ATR * atr,
         resistance - BREAKOUT_STOP_BUFFER_ATR * atr,
     )
-    breakout_risk = round_idx_price(breakout_entry, "up") - round_idx_price(
-        breakout_stop, "down"
-    )
     return reference_levels(
         "No setup (mid-range, no trigger nearby)",
         breakout_entry,
         breakout_stop,
-        breakout_entry + 2 * breakout_risk,
+        None,
     )
 
 
@@ -863,6 +932,7 @@ def calculate_flow_metrics(
         "foreign_net_1d_idr": None,
         "foreign_net_3d_idr": None,
         "foreign_net_5d_idr": None,
+        "foreign_turnover_3d_idr": None,
         "foreign_sessions_5d": 0,
         "foreign_unit_1d": None,
     }
@@ -877,7 +947,7 @@ def calculate_flow_metrics(
         for row in connection.execute(
             f"""
             SELECT trade_date, foreign_buy, foreign_sell, foreign_net,
-                   foreign_net_value, foreign_unit
+                   foreign_net_value, foreign_unit, value
             FROM idx_summary
             WHERE stock_code=? AND trade_date IN ({placeholders})
             """,
@@ -887,13 +957,13 @@ def calculate_flow_metrics(
     if not stored:
         return empty
 
-    blank = (None, None, None, None, None)
+    blank = (None, None, None, None, None, None)
 
-    def window_sum(count: int) -> int | None:
-        """Rupiah estimate of net foreign flow; blank unless every session is present."""
+    def window_sum(count: int, value_index: int) -> int | None:
+        """Sum a field only when every requested real session is present."""
         if len(sessions) < count:
             return None
-        values = [stored.get(day, blank)[3] for day in sessions[:count]]
+        values = [stored.get(day, blank)[value_index] for day in sessions[:count]]
         return None if any(value is None for value in values) else int(sum(values))
 
     today = stored.get(report_date.isoformat(), blank)
@@ -902,8 +972,9 @@ def calculate_flow_metrics(
         "foreign_sell_1d_shares": today[1],
         "foreign_net_1d_shares": today[2],
         "foreign_net_1d_idr": today[3],
-        "foreign_net_3d_idr": window_sum(3),
-        "foreign_net_5d_idr": window_sum(5),
+        "foreign_net_3d_idr": window_sum(3, 3),
+        "foreign_net_5d_idr": window_sum(5, 3),
+        "foreign_turnover_3d_idr": window_sum(3, 5),
         "foreign_sessions_5d": sum(
             1 for day in sessions if stored.get(day, blank)[3] is not None
         ),
@@ -950,6 +1021,22 @@ def build_report(
         }
         combined.update(calculate_price_metrics(connection, code, report_date))
         combined.update(calculate_flow_metrics(connection, code, report_date))
+        if str(row.get("value_source") or "").startswith("IDX Stock Summary"):
+            # Never compare official IDX turnover with a Yahoo close×volume
+            # average. Leave the ratio blank until 20 official sessions exist.
+            combined["avg_value_20d"] = None
+            official_values = connection.execute(
+                """
+                SELECT value FROM idx_summary
+                WHERE stock_code=? AND trade_date<=? AND value IS NOT NULL
+                ORDER BY trade_date DESC LIMIT 20
+                """,
+                (code, report_date.isoformat()),
+            ).fetchall()
+            if len(official_values) == 20:
+                combined["avg_value_20d"] = sum(
+                    float(item[0]) for item in official_values
+                ) / len(official_values)
         value, average = combined.get("transaction_value"), combined.get("avg_value_20d")
         combined["value_vs_20d_avg"] = (
             value / average if value and average else None
@@ -957,6 +1044,13 @@ def build_report(
         foreign_1d = combined.get("foreign_net_1d_idr")
         combined["foreign_net_pct_turnover"] = (
             foreign_1d / value if foreign_1d is not None and value else None
+        )
+        foreign_3d = combined.get("foreign_net_3d_idr")
+        turnover_3d = combined.get("foreign_turnover_3d_idr")
+        combined["foreign_net_pct_turnover_3d"] = (
+            foreign_3d / turnover_3d
+            if foreign_3d is not None and turnover_3d
+            else None
         )
 
         activity_ratio = max(
@@ -982,18 +1076,11 @@ def build_report(
             combined["foreign_signal"] = "Foreign neutral"
 
         setup = str(combined.get("setup") or "")
-        flow_1d = combined.get("foreign_net_1d_idr")
-        flow_3d = combined.get("foreign_net_3d_idr")
-        if not setup.startswith(("Breakout", "Pullback")):
-            combined["flow_check"] = "No trigger"
-        elif flow_1d is None or flow_3d is None:
-            combined["flow_check"] = "Flow unavailable"
-        elif flow_1d > 0 and flow_3d > 0:
-            combined["flow_check"] = "Flow confirms"
-        elif flow_1d < 0 and flow_3d < 0:
-            combined["flow_check"] = "Flow diverges"
-        else:
-            combined["flow_check"] = "Mixed flow"
+        flow_share_1d = combined.get("foreign_net_pct_turnover")
+        flow_share_3d = combined.get("foreign_net_pct_turnover_3d")
+        combined["flow_check"] = classify_flow_check(
+            setup, flow_share_1d, flow_share_3d
+        )
         report_rows.append(combined)
     report = pd.DataFrame(report_rows)
     return report.sort_values("rank") if "rank" in report else report
@@ -1051,17 +1138,20 @@ COLUMN_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
         ("volume_vs_20d", "Vol vs 20d", "Session volume over its 20-session average", "x"),
         ("support_prior_20d", "Support", "Lowest low of the 20 sessions before this one", "price"),
         ("resistance_prior_20d", "Resistance", "Highest high of the 20 sessions before this one", "price"),
+        ("recent_swing_low_5d", "5d swing low", "Lowest low of the latest five sessions", "price"),
     ]),
     ("Trade scenario (technical, not advice)", [
         ("setup", "Setup", "Which setup the chart presents, or why there is none", "setup"),
         ("setup_status", "Status", "At trigger, pending, or watch only when the setup rules fail", "text"),
         ("entry", "Entry", "Trigger level; a reference recovery or breakout level for watch-only rows", "price"),
         ("stop", "Stop", "Reference invalidation level", "price"),
-        ("target", "Target", "Reference objective; pullbacks are capped at resistance and breakouts use a 2R extension", "price"),
+        ("resistance_target", "Resistance target", "Prior 20-session resistance, reported separately from the 2R target", "price"),
+        ("target", "2R target", "Entry plus twice the initial per-share risk", "price"),
         ("distance_to_entry", "To entry", "How far the close is from the trigger", "pct_plain"),
         ("risk_pct_of_entry", "Risk", "Entry minus stop, as a percent of entry", "pct_plain"),
-        ("reward_to_risk", "R:R", "Reward-to-risk ratio", "num1"),
-        ("flow_check", "Flow check", "Whether one- and three-day foreign flow support the setup", "flow_check"),
+        ("reward_to_resistance", "R:R to resistance", "Reward-to-risk at prior resistance; hidden for watch-only rows", "num1"),
+        ("reward_to_risk", "R:R to 2R", "Reward-to-risk at the 2R target; hidden for watch-only rows", "num1"),
+        ("flow_check", "Flow check", "Requires one- and three-day foreign flow of at least 5% of turnover", "flow_check"),
     ]),
     ("As of", [
         ("ohlcv_date", "Price date", "Date of the price bar used", "text"),
@@ -1245,9 +1335,12 @@ def save_reports(
         "Returns use adjusted Yahoo Finance closes. Indicators and trade levels use raw "
         "prices; foreign-flow rupiah values estimate IDX share flows at the day's VWAP. "
         "Activity and foreign-participation signals are shown separately. Pullbacks "
-        "require a rising regime, use stops below support, and cap targets at prior "
-        "resistance. Rows that fail the setup rules still show reference levels and "
-        "are labelled Watch only. Trade scenarios use a days-to-weeks horizon."
+        "require a five-session rising MA20 regime and use stops below the latest "
+        "five-session swing low. Prior resistance and a 2R target are shown "
+        "separately. Breakouts more than 0.5 ATR above resistance are "
+        "rejected; mixed-trend breakouts remain deliberately allowed. Rows that fail "
+        "the setup rules retain reference levels but hide R:R and are labelled Watch "
+        "only. Trade scenarios use a days-to-weeks horizon."
     )
 
     limit_parts = [

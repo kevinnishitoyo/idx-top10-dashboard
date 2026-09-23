@@ -13,7 +13,7 @@
       "frequency": 54357,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Bank Rakyat Indonesia (Persero) Tbk."
     },
     {
@@ -25,7 +25,7 @@
       "frequency": 66769,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Bumi Resources Tbk."
     },
     {
@@ -37,7 +37,7 @@
       "frequency": 22311,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Bank Central Asia Tbk."
     },
     {
@@ -49,7 +49,7 @@
       "frequency": 30405,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Bank Mandiri (Persero) Tbk."
     },
     {
@@ -61,7 +61,7 @@
       "frequency": 48015,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Dian Swastatika Sentosa Tbk"
     },
     {
@@ -73,7 +73,7 @@
       "frequency": 21517,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Amman Mineral Internasional Tbk."
     },
     {
@@ -85,7 +85,7 @@
       "frequency": 24672,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "TIMAH (Persero) Tbk."
     },
     {
@@ -97,7 +97,7 @@
       "frequency": 23972,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Petrindo Jaya Kreasi Tbk."
     },
     {
@@ -109,7 +109,7 @@
       "frequency": 23579,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Telkom Indonesia (Persero) Tbk."
     },
     {
@@ -121,7 +121,7 @@
       "frequency": 14590,
       "avg_value_20d": null,
       "daily_change_pct": null,
-      "value_source": "IDX Stock Summary (official)",
+      "value_source": "IDX Stock Summary (official regular-market value)",
       "company": "Indosat Tbk."
     }
   ]

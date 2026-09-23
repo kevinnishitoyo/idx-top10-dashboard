@@ -14,7 +14,7 @@ REPORTS_DIR = PROJECT_DIR / "reports"
 DASHBOARD = REPORTS_DIR / "dashboard.html"
 LATEST_REPORT = REPORTS_DIR / "latest_report.csv"
 LATEST_NEWS = REPORTS_DIR / "latest_news.csv"
-MIN_REWARD_TO_RISK = 1.5
+MIN_RR_TO_RESISTANCE = 1.0
 
 
 def read_rows(path: Path) -> list[dict[str, str]]:
@@ -119,15 +119,18 @@ def validate_report_row(row: dict[str, str]) -> None:
 
     entry = numeric(row, "entry")
     stop = numeric(row, "stop")
+    resistance_target = numeric(row, "resistance_target")
     target = numeric(row, "target")
     reported_rr = numeric(row, "reward_to_risk")
+    reported_resistance_rr = numeric(row, "reward_to_resistance")
     setup_status = (row.get("setup_status") or "").strip()
     if entry is None or stop is None or target is None:
         raise SystemExit(f"{code}: active setup is missing a trade level")
-    if reported_rr is None:
-        raise SystemExit(f"{code}: active setup is missing reward-to-risk")
 
-    for label, price in (("entry", entry), ("stop", stop), ("target", target)):
+    levels = [("entry", entry), ("stop", stop), ("2R target", target)]
+    if resistance_target is not None:
+        levels.append(("resistance target", resistance_target))
+    for label, price in levels:
         if not valid_idx_price(price):
             raise SystemExit(f"{code}: {label} {price:g} is not on a valid IDX tick")
     if stop >= entry:
@@ -135,12 +138,13 @@ def validate_report_row(row: dict[str, str]) -> None:
     if target <= entry:
         raise SystemExit(f"{code}: target must be above entry")
     calculated_rr = (target - entry) / (entry - stop)
-    if abs(calculated_rr - reported_rr) > 1e-6:
-        raise SystemExit(f"{code}: reported reward-to-risk does not match rounded levels")
-    if active_setup and calculated_rr < MIN_REWARD_TO_RISK - 1e-9:
-        raise SystemExit(
-            f"{code}: reward-to-risk is below {MIN_REWARD_TO_RISK:.1f}"
-        )
+    if active_setup:
+        if reported_rr is None:
+            raise SystemExit(f"{code}: active setup is missing 2R reward-to-risk")
+        if abs(calculated_rr - reported_rr) > 1e-6:
+            raise SystemExit(f"{code}: reported 2R ratio does not match rounded levels")
+    elif reported_rr is not None or reported_resistance_rr is not None:
+        raise SystemExit(f"{code}: watch-only setup must hide reward-to-risk")
 
     close = numeric(row, "close")
     if close is None:
@@ -161,16 +165,47 @@ def validate_report_row(row: dict[str, str]) -> None:
         ma20 = numeric(row, "ma20")
         ma50 = numeric(row, "ma50")
         ma20_rising = boolean(row, "ma20_rising")
-        if None in (support, resistance, ma20, ma50):
+        swing_low = numeric(row, "recent_swing_low_5d")
+        if None in (support, resistance, ma20, ma50, swing_low):
             raise SystemExit(f"{code}: pullback is missing regime or level data")
         assert support is not None and resistance is not None
         assert ma20 is not None and ma50 is not None
         if not (ma20 > ma50 and ma20_rising is True and close > ma50):
             raise SystemExit(f"{code}: pullback lacks a confirmed rising regime")
-        if stop >= support:
-            raise SystemExit(f"{code}: pullback stop must sit below support")
-        if target > resistance:
-            raise SystemExit(f"{code}: pullback target exceeds prior resistance")
+        assert swing_low is not None
+        if stop >= swing_low:
+            raise SystemExit(f"{code}: pullback stop must sit below the five-day swing low")
+        if resistance_target is None or abs(resistance_target - resistance) > 1e-9:
+            raise SystemExit(f"{code}: pullback is missing its prior-resistance target")
+        calculated_resistance_rr = (resistance_target - entry) / (entry - stop)
+        if reported_resistance_rr is None or abs(
+            calculated_resistance_rr - reported_resistance_rr
+        ) > 1e-6:
+            raise SystemExit(f"{code}: R:R to resistance does not match rounded levels")
+        if calculated_resistance_rr < MIN_RR_TO_RESISTANCE - 1e-9:
+            raise SystemExit(
+                f"{code}: R:R to resistance is below {MIN_RR_TO_RESISTANCE:.1f}"
+            )
+
+    if setup.startswith("Breakout"):
+        atr = numeric(row, "atr14")
+        resistance = numeric(row, "resistance_prior_20d")
+        if atr is None or resistance is None:
+            raise SystemExit(f"{code}: breakout is missing ATR or resistance")
+        if close > resistance + 0.5 * atr + 1e-9:
+            raise SystemExit(f"{code}: breakout is extended more than 0.5 ATR")
+
+    flow_check = (row.get("flow_check") or "").strip()
+    flow_1d = numeric(row, "foreign_net_pct_turnover")
+    flow_3d = numeric(row, "foreign_net_pct_turnover_3d")
+    if flow_check == "Flow confirms" and not (
+        flow_1d is not None and flow_3d is not None and flow_1d >= 0.05 and flow_3d >= 0.05
+    ):
+        raise SystemExit(f"{code}: flow confirmation is below the 5% threshold")
+    if flow_check == "Flow diverges" and not (
+        flow_1d is not None and flow_3d is not None and flow_1d <= -0.05 and flow_3d <= -0.05
+    ):
+        raise SystemExit(f"{code}: flow divergence is below the 5% threshold")
 
 
 def main() -> None:

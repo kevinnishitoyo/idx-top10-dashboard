@@ -48,6 +48,8 @@ FIELD_CANDIDATES = {
     "close": ("penutupan", "close", "closing price", "last"),
     "volume": ("volume", "vol"),
     "value": ("nilai", "value", "turnover"),
+    "non_regular_volume": ("non regular volume", "nonregularvolume", "nonregular volume"),
+    "non_regular_value": ("non regular value", "nonregularvalue", "nonregular value"),
     "frequency": ("frekuensi", "frequency", "freq"),
     "foreign_buy": ("foreign buy", "foreign buy value", "asing beli"),
     "foreign_sell": ("foreign sell", "foreign sell value", "asing jual"),
@@ -77,6 +79,9 @@ def create_schema(connection: sqlite3.Connection) -> None:
             close REAL,
             volume INTEGER,
             value INTEGER,
+            reported_value INTEGER,
+            non_regular_volume INTEGER,
+            non_regular_value INTEGER,
             frequency INTEGER,
             foreign_buy INTEGER,
             foreign_sell INTEGER,
@@ -101,6 +106,9 @@ def create_schema(connection: sqlite3.Connection) -> None:
         ("foreign_sell_value", "INTEGER"),
         ("foreign_net_value", "INTEGER"),
         ("foreign_unit", "TEXT"),
+        ("reported_value", "INTEGER"),
+        ("non_regular_volume", "INTEGER"),
+        ("non_regular_value", "INTEGER"),
     ):
         if column not in existing:
             connection.execute(f"ALTER TABLE idx_summary ADD COLUMN {column} {ddl}")
@@ -131,14 +139,20 @@ def match_columns(columns: list[str]) -> dict[str, str]:
     normalized = {column: str(column).strip().lower() for column in columns}
     mapping: dict[str, str] = {}
     for field, candidates in FIELD_CANDIDATES.items():
-        allow_excluded = field in ("foreign_buy", "foreign_sell", "close")
+        allow_excluded = field in (
+            "foreign_buy", "foreign_sell", "close",
+            "non_regular_volume", "non_regular_value",
+        )
         best: tuple[int, str] | None = None
         for column, lowered in normalized.items():
             if column in mapping.values():
                 continue
             if not allow_excluded and any(term in lowered for term in EXCLUDE_TERMS):
                 continue
-            if any(term in lowered for term in ("non regular", "nonregular")):
+            if (
+                field not in ("non_regular_volume", "non_regular_value")
+                and any(term in lowered for term in ("non regular", "nonregular"))
+            ):
                 continue
             for priority, candidate in enumerate(candidates):
                 if lowered == candidate:
@@ -311,12 +325,28 @@ def ingest_file(
         code = str(row[mapping["code"]]).strip().upper()
         if not code or code in ("NAN", "NONE") or len(code) > 6:
             continue
-        value = to_number(row[mapping["value"]])
-        if value is None:
+        reported_value = to_number(row[mapping["value"]])
+        if reported_value is None:
             continue
+        non_regular_value = (
+            to_number(row[mapping["non_regular_value"]])
+            if "non_regular_value" in mapping
+            else None
+        )
+        value = max(0.0, reported_value - (non_regular_value or 0.0))
         buy = to_number(row[mapping["foreign_buy"]]) if "foreign_buy" in mapping else None
         sell = to_number(row[mapping["foreign_sell"]]) if "foreign_sell" in mapping else None
-        volume = to_number(row[mapping["volume"]]) if "volume" in mapping else None
+        reported_volume = to_number(row[mapping["volume"]]) if "volume" in mapping else None
+        non_regular_volume = (
+            to_number(row[mapping["non_regular_volume"]])
+            if "non_regular_volume" in mapping
+            else None
+        )
+        volume = (
+            None
+            if reported_volume is None
+            else max(0.0, reported_volume - (non_regular_volume or 0.0))
+        )
         vwap = value / volume if volume else None
         raw_net = None if buy is None or sell is None else buy - sell
         if foreign_unit == "shares":
@@ -338,6 +368,9 @@ def ingest_file(
                 to_number(row[mapping["close"]]) if "close" in mapping else None,
                 None if volume is None else int(volume),
                 int(value),
+                int(reported_value),
+                None if non_regular_volume is None else int(non_regular_volume),
+                None if non_regular_value is None else int(non_regular_value),
                 int(to_number(row[mapping["frequency"]]) or 0) if "frequency" in mapping else None,
                 None if share_buy is None else int(share_buy),
                 None if share_sell is None else int(share_sell),
@@ -358,16 +391,20 @@ def ingest_file(
     connection.executemany(
         """
         INSERT INTO idx_summary (
-            stock_code, trade_date, company, close, volume, value, frequency,
+            stock_code, trade_date, company, close, volume, value,
+            reported_value, non_regular_volume, non_regular_value, frequency,
             foreign_buy, foreign_sell, foreign_net, foreign_buy_value,
             foreign_sell_value, vwap, foreign_net_value, foreign_unit,
             source_file, ingested_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(stock_code, trade_date) DO UPDATE SET
             company=excluded.company,
             close=excluded.close,
             volume=excluded.volume,
             value=excluded.value,
+            reported_value=excluded.reported_value,
+            non_regular_volume=excluded.non_regular_volume,
+            non_regular_value=excluded.non_regular_value,
             frequency=excluded.frequency,
             foreign_buy=excluded.foreign_buy,
             foreign_sell=excluded.foreign_sell,
@@ -383,7 +420,7 @@ def ingest_file(
         records,
     )
     connection.commit()
-    has_foreign = any(record[13] is not None for record in records)
+    has_foreign = any(record[16] is not None for record in records)
     if not has_foreign:
         logging.warning(
             "%s: no foreign buy/sell columns detected - foreign flow will stay empty",

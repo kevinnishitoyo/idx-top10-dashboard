@@ -33,12 +33,16 @@ directly as rupiah. Generic `Foreign Buy` / `Foreign Sell` headers are accepted
 as shares only while every populated row passes strict volume checks. If the
 format changes or the units are ambiguous, import fails instead of publishing
 silently incorrect foreign-flow figures.
+If a future IDX file includes `NonRegularValue` or `NonRegularVolume`, those
+amounts are stored separately and removed from the value and volume used for
+the ranking. The current CSV format was checked and does not include those
+fields, so its published `Value` and `Volume` are used unchanged.
 
 ## Which questions this answers
 
 | Question | Answered by |
 | --- | --- |
-| Top 10 by transaction value | IDX Stock Summary official value; yfinance estimate (raw close x volume, 20-session value floor) as fallback |
+| Top 10 by transaction value | IDX Stock Summary official value, adjusted for explicit non-regular fields when supplied; yfinance estimate (raw close x volume, 20-session value floor) as fallback |
 | Price performance 1d / 3d / 5d | yfinance adjusted closes |
 | Foreign flow 1d / 3d / 5d net | IDX Stock Summary foreign buy/sell, summed over real sessions; blank unless every session in the window is present |
 | Largest buying/selling brokers | **Not available.** No free source publishes per-stock broker flow; it needs a broker terminal |
@@ -54,21 +58,36 @@ silently incorrect foreign-flow figures.
   so the two are measured over the same window.
 - **Trade scenarios follow the setup the chart presents**, and never a long in a
   downtrend:
-  - *Breakout long* when price is at or within 3% of the prior-20-session high;
-    the former resistance anchors the stop and a 2R extension sets the target.
-  - Pullbacks require MA20 above MA50, a rising MA20, and price above MA50.
+  - *Breakout long* when price is at or within 3% of the prior-20-session high,
+    but no more than 0.5 ATR above it; this prevents chasing an extended move.
+    Mixed-trend breakouts are deliberately allowed and labelled as such.
+  - Pullbacks require MA20 above MA50, MA20 above its level five sessions ago,
+    and price above MA50.
     A price within 0.5 ATR of MA20 is labelled either a test from above or a
     pending reclaim from below.
   - A support test must sit within 0.5 ATR above support. Pullback stops sit
-    0.5 ATR below support and targets are capped at prior resistance.
+    0.5 ATR below the latest five-session swing low. Prior resistance must
+    offer at least 1.0R and is reported separately from the 2R target.
   - When the setup rules fail, the row is marked **Watch only** and the reason
     is shown (downtrend, below support, unconfirmed regime, insufficient room
     to resistance, or mid-range with no nearby trigger). Reference
-    entry/stop/target levels remain visible, but are not active signals.
+    entry/stop/target levels remain visible, but R:R is hidden because these
+    rows are not active signals.
   Each scenario carries distance to entry, risk per share, risk as a percent of
-  entry, and reward-to-risk after valid-tick rounding. Scenarios below 1.5R are
-  rejected. IDX auto-rejection limits cap how far price can travel in one
+  entry, R:R to prior resistance, and R:R to the 2R target after valid-tick
+  rounding. IDX auto-rejection limits cap how far price can travel in one
   session, so a far target is not a one-day target.
+- **Foreign-flow confirmation** requires both one-day and three-day net flow to
+  exceed +5% of turnover; divergence requires both to be below -5%. Smaller
+  readings are neutral/mixed rather than confirmation based on sign alone.
+- **Turnover versus 20-day average** compares like with like: official IDX
+  value against 20 official IDX sessions, or Yahoo estimates against Yahoo
+  estimates. It stays blank until a complete same-source window is available.
+- **Corporate-action guard:** if the adjusted-close/raw-close ratio shifts by
+  more than 2% within the latest 50 sessions, raw-price setups are disabled and
+  the row is marked Watch only until the event leaves the indicator window.
+- **RSI edge cases:** RSI is 100 when the Wilder window has gains and no losses,
+  and 50 when both gains and losses are zero.
 - **Liquidity floor:** the yfinance fallback ranking skips stocks whose
   20-session average value is under Rp 5bn (`MIN_AVG_VALUE_20D`).
 - **Ranking universe:** the fallback ranks only the stocks in `companies.csv`,
@@ -122,11 +141,13 @@ run.bat
 ## Daily behavior
 
 1. Downloads recent daily bars for every code in `companies.csv`.
-2. Uses the newest common market date and ranks stocks by close × volume.
+2. Uses the newest common market date and ranks stocks by official IDX value
+   when available (less explicit non-regular value), otherwise close × volume.
 3. Selects the top 10 and refreshes about 550 calendar days of price history so
    dividend and split adjustments can revise older adjusted closes.
 4. Calculates 1/3/5-session returns, MA20, MA50, RSI(14), ATR(14), volume versus
-   its 20-session average, and 20-session support/resistance.
+   its 20-session average, five-session swing low, 20-session
+   support/resistance, corporate-action guard, and trade reference levels.
 5. Saves the SQLite history, CSV reports, dashboard, and raw ranking snapshot.
 6. `news.py` retrieves recent Google News RSS headlines for the exact date and
    ordered stock list in `reports/latest_report.csv`.
