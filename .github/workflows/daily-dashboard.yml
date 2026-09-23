@@ -3,8 +3,9 @@ name: Refresh and publish dashboard
 on:
   workflow_dispatch:
   schedule:
-    # 18:15 WIB (UTC+7), Monday-Friday.
+    # 18:15 WIB and 21:00 (UTC+7), Monday-Friday.
     - cron: "15 11 * * 1-5"
+    - cron: "0 14 * * 1-5"
 
 permissions:
   contents: write
