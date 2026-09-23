@@ -61,9 +61,10 @@ silently incorrect foreign-flow figures.
     pending reclaim from below.
   - A support test must sit within 0.5 ATR above support. Pullback stops sit
     0.5 ATR below support and targets are capped at prior resistance.
-  - Otherwise blank, with the reason given (downtrend, below support,
-    unconfirmed regime, insufficient room to resistance, mid-range with no
-    nearby trigger, or too little history for ATR).
+  - When the setup rules fail, the row is marked **Watch only** and the reason
+    is shown (downtrend, below support, unconfirmed regime, insufficient room
+    to resistance, or mid-range with no nearby trigger). Reference
+    entry/stop/target levels remain visible, but are not active signals.
   Each scenario carries distance to entry, risk per share, risk as a percent of
   entry, and reward-to-risk after valid-tick rounding. Scenarios below 1.5R are
   rejected. IDX auto-rejection limits cap how far price can travel in one

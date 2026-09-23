@@ -27,7 +27,8 @@ class TradeScenarioTests(unittest.TestCase):
             "Mixed", 960, 940, 1200, 80, 980, 990, False
         )
         self.assertEqual(result["setup"], "No long setup (uptrend regime not confirmed)")
-        self.assertIsNone(result["entry"])
+        self.assertEqual(result["setup_status"], "Watch only")
+        self.assertIsNotNone(result["entry"])
 
     def test_support_test_requires_half_atr_proximity(self):
         near = trade_scenario("Mixed", 950, 940, 1200, 40, 1020, 900, True)
@@ -40,7 +41,18 @@ class TradeScenarioTests(unittest.TestCase):
             "Bullish", 1000, 900, 1100, 100, 980, 900, True
         )
         self.assertEqual(result["setup"], "No setup (insufficient room to resistance)")
-        self.assertIsNone(result["target"])
+        self.assertEqual(result["setup_status"], "Watch only")
+        self.assertIsNotNone(result["target"])
+        self.assertLess(result["reward_to_risk"], 1.5)
+
+    def test_mid_range_row_keeps_watch_levels(self):
+        result = trade_scenario(
+            "Bullish", 1050, 900, 1200, 80, 1000, 900, True
+        )
+        self.assertEqual(result["setup"], "No setup (mid-range, no trigger nearby)")
+        self.assertEqual(result["setup_status"], "Watch only")
+        for key in ("entry", "stop", "target", "reward_to_risk"):
+            self.assertIsNotNone(result[key])
 
     def test_breakout_levels_are_valid_ticks(self):
         result = trade_scenario(

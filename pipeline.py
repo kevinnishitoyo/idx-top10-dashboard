@@ -657,12 +657,13 @@ def trade_scenario(
     ma50: float | None,
     ma20_rising: bool,
 ) -> dict[str, Any]:
-    """Pick the setup the chart actually presents, or none.
+    """Pick the setup the chart actually presents and show reference levels.
 
     Breakout long: price at or near the prior-20-session high.
     Pullback long: a confirmed rising regime testing MA20 or support. Pullback
       stops sit below structural support and targets are capped at resistance.
-    Downtrends get no long setup at all.
+    Rows that fail the setup rules retain tick-valid reference levels, but are
+    explicitly labelled ``Watch only`` rather than presented as trade signals.
     """
     blank: dict[str, Any] = {
         "setup": None,
@@ -675,12 +676,46 @@ def trade_scenario(
         "reward_to_risk": None,
         "setup_status": None,
     }
-    if trend == "Bearish":
-        return {**blank, "setup": "No long setup (downtrend)"}
     if trend == "Insufficient history":
         return {**blank, "setup": "No setup (insufficient history)"}
     if atr is None:
         return {**blank, "setup": "No setup (ATR needs 14 sessions)"}
+
+    def reference_levels(
+        reason: str,
+        entry: float,
+        stop: float,
+        target: float,
+    ) -> dict[str, Any]:
+        """Return a non-actionable, tick-valid plan so every row remains useful."""
+        rounded_entry = round_idx_price(entry, "up")
+        rounded_stop = round_idx_price(stop, "down")
+        if rounded_stop <= 0 or rounded_stop >= rounded_entry:
+            rounded_stop = round_idx_price(rounded_entry - atr, "down")
+        risk = rounded_entry - rounded_stop
+        rounded_target = round_idx_price(target, "down")
+        if rounded_target <= rounded_entry:
+            rounded_target = round_idx_price(rounded_entry + 2 * risk, "down")
+        reward_to_risk = (rounded_target - rounded_entry) / risk
+        return {
+            "setup": reason,
+            "entry": rounded_entry,
+            "stop": rounded_stop,
+            "target": rounded_target,
+            "distance_to_entry": rounded_entry / close - 1,
+            "risk_per_share": risk,
+            "risk_pct_of_entry": risk / rounded_entry,
+            "reward_to_risk": reward_to_risk,
+            "setup_status": "Watch only",
+        }
+
+    if trend == "Bearish":
+        return reference_levels(
+            "No long setup (downtrend)",
+            max(close, ma20 or close),
+            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            resistance,
+        )
 
     def priced(
         setup: str,
@@ -707,10 +742,12 @@ def trade_scenario(
 
         reward_to_risk = (rounded_target - rounded_entry) / risk
         if reward_to_risk < MIN_REWARD_TO_RISK:
-            return {
-                **blank,
-                "setup": "No setup (insufficient room to resistance)",
-            }
+            return reference_levels(
+                "No setup (insufficient room to resistance)",
+                rounded_entry,
+                rounded_stop,
+                rounded_target,
+            )
 
         return {
             "setup": setup,
@@ -734,7 +771,12 @@ def trade_scenario(
         return priced(label, entry, stop)
 
     if close < support:
-        return {**blank, "setup": "No setup (below 20-session support)"}
+        return reference_levels(
+            "No setup (below 20-session support)",
+            support,
+            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            resistance,
+        )
 
     uptrend_regime = bool(
         ma20 is not None
@@ -744,7 +786,12 @@ def trade_scenario(
         and close > ma50
     )
     if not uptrend_regime:
-        return {**blank, "setup": "No long setup (uptrend regime not confirmed)"}
+        return reference_levels(
+            "No long setup (uptrend regime not confirmed)",
+            max(close, ma20 or close),
+            support - SUPPORT_STOP_BUFFER_ATR * atr,
+            resistance,
+        )
 
     pullback_stop = support - SUPPORT_STOP_BUFFER_ATR * atr
 
@@ -774,7 +821,20 @@ def trade_scenario(
             resistance,
         )
 
-    return {**blank, "setup": "No setup (mid-range, no trigger nearby)"}
+    breakout_entry = resistance
+    breakout_stop = max(
+        support - SUPPORT_STOP_BUFFER_ATR * atr,
+        resistance - BREAKOUT_STOP_BUFFER_ATR * atr,
+    )
+    breakout_risk = round_idx_price(breakout_entry, "up") - round_idx_price(
+        breakout_stop, "down"
+    )
+    return reference_levels(
+        "No setup (mid-range, no trigger nearby)",
+        breakout_entry,
+        breakout_stop,
+        breakout_entry + 2 * breakout_risk,
+    )
 
 
 def session_calendar(
@@ -994,10 +1054,10 @@ COLUMN_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
     ]),
     ("Trade scenario (technical, not advice)", [
         ("setup", "Setup", "Which setup the chart presents, or why there is none", "setup"),
-        ("setup_status", "Status", "Whether price is at the trigger or still pending", "text"),
-        ("entry", "Entry", "Trigger level", "price"),
-        ("stop", "Stop", "Invalidation level", "price"),
-        ("target", "Target", "Pullbacks are capped at resistance; breakouts use a 2R extension", "price"),
+        ("setup_status", "Status", "At trigger, pending, or watch only when the setup rules fail", "text"),
+        ("entry", "Entry", "Trigger level; a reference recovery or breakout level for watch-only rows", "price"),
+        ("stop", "Stop", "Reference invalidation level", "price"),
+        ("target", "Target", "Reference objective; pullbacks are capped at resistance and breakouts use a 2R extension", "price"),
         ("distance_to_entry", "To entry", "How far the close is from the trigger", "pct_plain"),
         ("risk_pct_of_entry", "Risk", "Entry minus stop, as a percent of entry", "pct_plain"),
         ("reward_to_risk", "R:R", "Reward-to-risk ratio", "num1"),
@@ -1131,11 +1191,12 @@ def render_summary(report: pd.DataFrame) -> str:
 
     turnover = total("transaction_value")
     flow = total("foreign_net_1d_idr")
-    candidates = at_trigger = pending = 0
+    candidates = at_trigger = pending = watch_only = 0
     if "setup_status" in report:
         statuses = report["setup_status"].fillna("")
         at_trigger = int((statuses == "At trigger").sum())
         pending = int((statuses == "Pending").sum())
+        watch_only = int((statuses == "Watch only").sum())
         candidates = at_trigger + pending
     flow_days = None
     if "foreign_sessions_5d" in report:
@@ -1150,7 +1211,7 @@ def render_summary(report: pd.DataFrame) -> str:
         ),
         (
             "Setup candidates",
-            f"{candidates} · {at_trigger} at trigger · {pending} pending",
+            f"{candidates} · {at_trigger} at trigger · {pending} pending · {watch_only} watch only",
         ),
         ("Foreign-flow coverage", f"{flow_days} of 5 sessions" if flow_days is not None else "Unavailable"),
     ]
@@ -1185,7 +1246,8 @@ def save_reports(
         "prices; foreign-flow rupiah values estimate IDX share flows at the day's VWAP. "
         "Activity and foreign-participation signals are shown separately. Pullbacks "
         "require a rising regime, use stops below support, and cap targets at prior "
-        "resistance. Trade scenarios use a days-to-weeks horizon."
+        "resistance. Rows that fail the setup rules still show reference levels and "
+        "are labelled Watch only. Trade scenarios use a days-to-weeks horizon."
     )
 
     limit_parts = [

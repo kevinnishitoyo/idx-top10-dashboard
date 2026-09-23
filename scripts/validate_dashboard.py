@@ -115,10 +115,7 @@ def validate_report_row(row: dict[str, str]) -> None:
         raise SystemExit(f"{code}: 5-day flow has fewer than 5 covered sessions")
 
     setup = row.get("setup") or ""
-    if not setup.startswith(("Breakout", "Pullback")):
-        if (row.get("setup_status") or "").strip():
-            raise SystemExit(f"{code}: inactive setup unexpectedly has a status")
-        return
+    active_setup = setup.startswith(("Breakout", "Pullback"))
 
     entry = numeric(row, "entry")
     stop = numeric(row, "stop")
@@ -140,7 +137,7 @@ def validate_report_row(row: dict[str, str]) -> None:
     calculated_rr = (target - entry) / (entry - stop)
     if abs(calculated_rr - reported_rr) > 1e-6:
         raise SystemExit(f"{code}: reported reward-to-risk does not match rounded levels")
-    if calculated_rr < MIN_REWARD_TO_RISK - 1e-9:
+    if active_setup and calculated_rr < MIN_REWARD_TO_RISK - 1e-9:
         raise SystemExit(
             f"{code}: reward-to-risk is below {MIN_REWARD_TO_RISK:.1f}"
         )
@@ -148,7 +145,11 @@ def validate_report_row(row: dict[str, str]) -> None:
     close = numeric(row, "close")
     if close is None:
         raise SystemExit(f"{code}: active setup is missing its close")
-    expected_status = "At trigger" if entry <= close else "Pending"
+    expected_status = (
+        ("At trigger" if entry <= close else "Pending")
+        if active_setup
+        else "Watch only"
+    )
     if setup_status != expected_status:
         raise SystemExit(
             f"{code}: setup status {setup_status!r} should be {expected_status!r}"
