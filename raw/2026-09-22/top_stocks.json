@@ -1,108 +1,128 @@
 {
   "report_date": "2026-09-22",
-  "ranking_source": "yfinance estimate",
+  "ranking_source": "IDX Stock Summary (963 stocks on 2026-09-22)",
   "universe_size": 46,
   "min_avg_value_20d": 5000000000,
   "rows": [
     {
+      "rank": 1,
       "code": "BBRI",
       "close": 3180.0,
       "volume": 272879800,
-      "value": 867757764000,
-      "avg_value_20d": 658268655400.0,
-      "daily_change_pct": -3.6363636363636376,
-      "rank": 1,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 875447057000,
+      "frequency": 54357,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Rakyat Indonesia (Persero) Tbk."
     },
     {
+      "rank": 2,
       "code": "BUMI",
       "close": 184.0,
       "volume": 3843560500,
-      "value": 707215132000,
-      "avg_value_20d": 699738774760.0,
-      "daily_change_pct": -4.1666666666666625,
-      "rank": 2,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 714088087500,
+      "frequency": 66769,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bumi Resources Tbk."
     },
     {
+      "rank": 3,
       "code": "BBCA",
       "close": 6200.0,
       "volume": 93211200,
-      "value": 577909440000,
-      "avg_value_20d": 807889826875.0,
-      "daily_change_pct": -0.40160642570281624,
-      "rank": 3,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 579943142500,
+      "frequency": 22311,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Central Asia Tbk."
     },
     {
+      "rank": 4,
       "code": "BMRI",
       "close": 4160.0,
       "volume": 123121600,
-      "value": 512185856000,
-      "avg_value_20d": 602334980500.0,
-      "daily_change_pct": -0.952380952380949,
-      "rank": 4,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 514998693000,
+      "frequency": 30405,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Bank Mandiri (Persero) Tbk."
     },
     {
+      "rank": 5,
+      "code": "DSSA",
+      "close": 980.0,
+      "volume": 494919200,
+      "value": 490710485000,
+      "frequency": 48015,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Dian Swastatika Sentosa Tbk"
+    },
+    {
+      "rank": 6,
       "code": "AMMN",
       "close": 4710.0,
       "volume": 86719800,
-      "value": 408450258000,
-      "avg_value_20d": 404504327400.0,
-      "daily_change_pct": 1.0729613733905685,
-      "rank": 5,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 411005572000,
+      "frequency": 21517,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Amman Mineral Internasional Tbk."
     },
     {
+      "rank": 7,
+      "code": "TINS",
+      "close": 4610.0,
+      "volume": 76750100,
+      "value": 360167135000,
+      "frequency": 24672,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "TIMAH (Persero) Tbk."
+    },
+    {
+      "rank": 8,
       "code": "CUAN",
       "close": 950.0,
       "volume": 315325400,
-      "value": 299559130000,
-      "avg_value_20d": 442420053425.0,
-      "daily_change_pct": 2.1505376344086002,
-      "rank": 6,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 292929908500,
+      "frequency": 23972,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Petrindo Jaya Kreasi Tbk."
     },
     {
+      "rank": 9,
       "code": "TLKM",
       "close": 2470.0,
       "volume": 111856600,
-      "value": 276285802000,
-      "avg_value_20d": 285075382450.0,
-      "daily_change_pct": -1.200000000000001,
-      "rank": 7,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 277593798000,
+      "frequency": 23579,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Telkom Indonesia (Persero) Tbk."
     },
     {
+      "rank": 10,
       "code": "ISAT",
       "close": 2410.0,
       "volume": 114362000,
-      "value": 275612420000,
-      "avg_value_20d": 172178837750.0,
-      "daily_change_pct": 4.329004329004338,
-      "rank": 8,
-      "value_source": "yfinance estimate (raw close x volume)"
-    },
-    {
-      "code": "TPIA",
-      "close": 1810.0,
-      "volume": 140409700,
-      "value": 254141557000,
-      "avg_value_20d": 333894155600.0,
-      "daily_change_pct": -3.7234042553191515,
-      "rank": 9,
-      "value_source": "yfinance estimate (raw close x volume)"
-    },
-    {
-      "code": "ANTM",
-      "close": 3170.0,
-      "volume": 80058600,
-      "value": 253785762000,
-      "avg_value_20d": 375120239150.0,
-      "daily_change_pct": -2.1604938271604923,
-      "rank": 10,
-      "value_source": "yfinance estimate (raw close x volume)"
+      "value": 274037429000,
+      "frequency": 14590,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official)",
+      "company": "Indosat Tbk."
     }
   ]
 }
