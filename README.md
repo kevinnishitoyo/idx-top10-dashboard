@@ -55,17 +55,19 @@ silently incorrect foreign-flow figures.
 - **Trade scenarios follow the setup the chart presents**, and never a long in a
   downtrend:
   - *Breakout long* when price is at or within 3% of the prior-20-session high;
-    stop at support or 1.5 ATR below entry, whichever is higher.
-  - *Pullback long (reclaim MA20)* when price is within 5% of its MA20;
-    entry triggers on the reclaim, same stop rule.
-  - *Pullback long (at support)* when price sits within 8% above support;
-    entry at market, stop 0.5 ATR below the support level.
+    the former resistance anchors the stop and a 2R extension sets the target.
+  - Pullbacks require MA20 above MA50, a rising MA20, and price above MA50.
+    A price within 0.5 ATR of MA20 is labelled either a test from above or a
+    pending reclaim from below.
+  - A support test must sit within 0.5 ATR above support. Pullback stops sit
+    0.5 ATR below support and targets are capped at prior resistance.
   - Otherwise blank, with the reason given (downtrend, below support,
-    mid-range with no trigger nearby, or too little history for ATR).
+    unconfirmed regime, insufficient room to resistance, mid-range with no
+    nearby trigger, or too little history for ATR).
   Each scenario carries distance to entry, risk per share, risk as a percent of
-  entry, and reward-to-risk (2.0 by construction). IDX auto-rejection limits cap
-  how far price can travel in one session, so a far target is not a one-day
-  target.
+  entry, and reward-to-risk after valid-tick rounding. Scenarios below 1.5R are
+  rejected. IDX auto-rejection limits cap how far price can travel in one
+  session, so a far target is not a one-day target.
 - **Liquidity floor:** the yfinance fallback ranking skips stocks whose
   20-session average value is under Rp 5bn (`MIN_AVG_VALUE_20D`).
 - **Ranking universe:** the fallback ranks only the stocks in `companies.csv`,
@@ -120,8 +122,8 @@ run.bat
 
 1. Downloads recent daily bars for every code in `companies.csv`.
 2. Uses the newest common market date and ranks stocks by close × volume.
-3. Selects the top 10 and refreshes about 550 calendar days of history for a
-   newly seen stock; later runs update only a short overlap.
+3. Selects the top 10 and refreshes about 550 calendar days of price history so
+   dividend and split adjustments can revise older adjusted closes.
 4. Calculates 1/3/5-session returns, MA20, MA50, RSI(14), ATR(14), volume versus
    its 20-session average, and 20-session support/resistance.
 5. Saves the SQLite history, CSV reports, dashboard, and raw ranking snapshot.

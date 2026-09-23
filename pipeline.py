@@ -56,9 +56,10 @@ MIN_AVG_VALUE_20D = 5_000_000_000  # Rp; skip stocks too thin to trade
 FLOW_SESSIONS = 5
 MIN_IDX_ROWS = 50                # below this the IDX file looks partial
 BREAKOUT_PROXIMITY = 0.03        # breakout setup: within 3% of prior-20d resistance
-PULLBACK_MA20_BAND = 0.05        # pullback setup: within 5% of MA20
-PULLBACK_SUPPORT_BAND = 0.08     # pullback setup: within 8% above support
-SUPPORT_STOP_BUFFER_ATR = 0.5    # at-support stop sits this far below support
+LEVEL_PROXIMITY_ATR = 0.5        # a test must sit within half an ATR of its level
+SUPPORT_STOP_BUFFER_ATR = 0.5    # pullback stops sit this far below support
+BREAKOUT_STOP_BUFFER_ATR = 1.0   # breakout stop sits below the former resistance
+MIN_REWARD_TO_RISK = 1.5         # reject setups with too little room to resistance
 
 
 def ensure_directories() -> None:
@@ -556,6 +557,14 @@ def calculate_price_metrics(
     current_close = float(close.iloc[-1])
     current_ma20 = None if pd.isna(ma20.iloc[-1]) else float(ma20.iloc[-1])
     current_ma50 = None if pd.isna(ma50.iloc[-1]) else float(ma50.iloc[-1])
+    previous_ma20 = (
+        None if len(ma20) < 2 or pd.isna(ma20.iloc[-2]) else float(ma20.iloc[-2])
+    )
+    ma20_rising = (
+        current_ma20 is not None
+        and previous_ma20 is not None
+        and current_ma20 > previous_ma20
+    )
     current_atr = None if pd.isna(atr14.iloc[-1]) else float(atr14.iloc[-1])
 
     if current_ma20 is None or current_ma50 is None:
@@ -568,7 +577,14 @@ def calculate_price_metrics(
         trend = "Mixed"
 
     scenario = trade_scenario(
-        trend, current_close, support, resistance, current_atr, current_ma20
+        trend,
+        current_close,
+        support,
+        resistance,
+        current_atr,
+        current_ma20,
+        current_ma50,
+        ma20_rising,
     )
 
     metrics = {
@@ -579,6 +595,7 @@ def calculate_price_metrics(
         "return_5d": period_return(5),
         "ma20": current_ma20,
         "ma50": current_ma50,
+        "ma20_rising": ma20_rising,
         "rsi14": None if pd.isna(rsi14.iloc[-1]) else float(rsi14.iloc[-1]),
         "atr14": current_atr,
         "atr_pct": None if not current_atr else current_atr / current_close,
@@ -637,13 +654,14 @@ def trade_scenario(
     resistance: float,
     atr: float | None,
     ma20: float | None,
+    ma50: float | None,
+    ma20_rising: bool,
 ) -> dict[str, Any]:
     """Pick the setup the chart actually presents, or none.
 
     Breakout long: price at or near the prior-20-session high.
-    Pullback long: price holding above support and either back at its MA20
-      (trigger on the reclaim) or sitting just above support (trigger at market,
-      stop below the level).
+    Pullback long: a confirmed rising regime testing MA20 or support. Pullback
+      stops sit below structural support and targets are capped at resistance.
     Downtrends get no long setup at all.
     """
     blank: dict[str, Any] = {
@@ -655,6 +673,7 @@ def trade_scenario(
         "risk_per_share": None,
         "risk_pct_of_entry": None,
         "reward_to_risk": None,
+        "setup_status": None,
     }
     if trend == "Bearish":
         return {**blank, "setup": "No long setup (downtrend)"}
@@ -663,7 +682,12 @@ def trade_scenario(
     if atr is None:
         return {**blank, "setup": "No setup (ATR needs 14 sessions)"}
 
-    def priced(setup: str, entry: float, stop: float) -> dict[str, Any]:
+    def priced(
+        setup: str,
+        entry: float,
+        stop: float,
+        target_cap: float | None = None,
+    ) -> dict[str, Any]:
         rounded_entry = round_idx_price(entry, "up")
         rounded_stop = round_idx_price(stop, "down")
 
@@ -674,8 +698,19 @@ def trade_scenario(
                 "setup": "No setup (stop would sit at or above entry)",
             }
 
-        unrounded_target = rounded_entry + 2 * risk
-        rounded_target = round_idx_price(unrounded_target, "up")
+        target = rounded_entry + 2 * risk
+        if target_cap is not None:
+            target = min(target, target_cap)
+        rounded_target = round_idx_price(target, "down")
+        if rounded_target <= rounded_entry:
+            return {**blank, "setup": "No setup (resistance is at or below entry)"}
+
+        reward_to_risk = (rounded_target - rounded_entry) / risk
+        if reward_to_risk < MIN_REWARD_TO_RISK:
+            return {
+                **blank,
+                "setup": "No setup (insufficient room to resistance)",
+            }
 
         return {
             "setup": setup,
@@ -685,15 +720,14 @@ def trade_scenario(
             "distance_to_entry": rounded_entry / close - 1,
             "risk_per_share": risk,
             "risk_pct_of_entry": risk / rounded_entry,
-            "reward_to_risk": (
-                rounded_target - rounded_entry
-            ) / risk,
+            "reward_to_risk": reward_to_risk,
+            "setup_status": "At trigger" if rounded_entry <= close else "Pending",
         }
 
     # 1. Breakout: at or near the prior high.
     if close >= resistance * (1 - BREAKOUT_PROXIMITY):
         entry = max(close, resistance)
-        stop = max(support, entry - 1.5 * atr)
+        stop = max(support - SUPPORT_STOP_BUFFER_ATR * atr, resistance - BREAKOUT_STOP_BUFFER_ATR * atr)
         if stop >= entry:
             stop = entry - atr
         label = "Breakout long" if trend == "Bullish" else "Breakout long (mixed trend)"
@@ -702,19 +736,43 @@ def trade_scenario(
     if close < support:
         return {**blank, "setup": "No setup (below 20-session support)"}
 
-    # 2. Pullback to the MA20: trigger on the reclaim.
-    if ma20 is not None and abs(close / ma20 - 1) <= PULLBACK_MA20_BAND:
-        entry = max(close, ma20)
-        stop = max(support, entry - 1.5 * atr)
-        if stop >= entry:
-            stop = entry - atr
-        return priced("Pullback long (reclaim MA20)", entry, stop)
+    uptrend_regime = bool(
+        ma20 is not None
+        and ma50 is not None
+        and ma20 > ma50
+        and ma20_rising
+        and close > ma50
+    )
+    if not uptrend_regime:
+        return {**blank, "setup": "No long setup (uptrend regime not confirmed)"}
 
-    # 3. Pullback to support: trigger at market, stop below the level.
-    if close <= support * (1 + PULLBACK_SUPPORT_BAND):
-        entry = close
-        stop = support - SUPPORT_STOP_BUFFER_ATR * atr
-        return priced("Pullback long (at support)", entry, stop)
+    pullback_stop = support - SUPPORT_STOP_BUFFER_ATR * atr
+
+    # 2. Pullback to MA20, distinguishing a test from a pending reclaim.
+    if ma20 is not None and abs(close - ma20) <= LEVEL_PROXIMITY_ATR * atr:
+        if close >= ma20:
+            return priced(
+                "Pullback long (test MA20 from above)",
+                close,
+                pullback_stop,
+                resistance,
+            )
+        return priced(
+            "Pullback long (pending MA20 reclaim)",
+            ma20,
+            pullback_stop,
+            resistance,
+        )
+
+    # 3. Support test: within half an ATR above support, never a loose % band.
+    support_distance = close - support
+    if 0 <= support_distance <= LEVEL_PROXIMITY_ATR * atr:
+        return priced(
+            "Pullback long (test support)",
+            close,
+            pullback_stop,
+            resistance,
+        )
 
     return {**blank, "setup": "No setup (mid-range, no trigger nearby)"}
 
@@ -847,16 +905,21 @@ def build_report(
         )
         foreign_share = combined["foreign_net_pct_turnover"]
         daily_return = combined.get("return_1d") or 0
-        if activity_ratio >= 1.2 and foreign_share is not None and foreign_share >= 0.05:
-            combined["activity_signal"] = "Foreign accumulation"
-        elif activity_ratio >= 1.2 and foreign_share is not None and foreign_share <= -0.05:
-            combined["activity_signal"] = "Foreign distribution"
-        elif activity_ratio >= 1.2 and abs(daily_return) >= 0.02:
+        if activity_ratio >= 1.2 and abs(daily_return) >= 0.02:
             combined["activity_signal"] = "Price-led activity"
         elif activity_ratio >= 1.2:
             combined["activity_signal"] = "High activity"
         else:
             combined["activity_signal"] = "Normal activity"
+
+        if foreign_share is None:
+            combined["foreign_signal"] = "Unavailable"
+        elif foreign_share >= 0.05:
+            combined["foreign_signal"] = "Foreign accumulation"
+        elif foreign_share <= -0.05:
+            combined["foreign_signal"] = "Foreign distribution"
+        else:
+            combined["foreign_signal"] = "Foreign neutral"
 
         setup = str(combined.get("setup") or "")
         flow_1d = combined.get("foreign_net_1d_idr")
@@ -915,7 +978,8 @@ COLUMN_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
         ("foreign_sessions_5d", "Days", "How many of the last 5 sessions have foreign-flow data", "int"),
     ]),
     ("Market participation", [
-        ("activity_signal", "Activity", "Price, volume, turnover and foreign-flow classification", "activity"),
+        ("activity_signal", "Activity", "Price, volume and turnover classification", "activity"),
+        ("foreign_signal", "Foreign signal", "Foreign net flow as a share of turnover", "activity"),
         ("foreign_net_pct_turnover", "Foreign / turnover", "Estimated one-day foreign net flow divided by turnover", "pct_plain"),
     ]),
     ("Technical picture", [
@@ -930,9 +994,10 @@ COLUMN_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
     ]),
     ("Trade scenario (technical, not advice)", [
         ("setup", "Setup", "Which setup the chart presents, or why there is none", "setup"),
+        ("setup_status", "Status", "Whether price is at the trigger or still pending", "text"),
         ("entry", "Entry", "Trigger level", "price"),
         ("stop", "Stop", "Invalidation level", "price"),
-        ("target", "Target", "Entry plus twice the risk", "price"),
+        ("target", "Target", "Pullbacks are capped at resistance; breakouts use a 2R extension", "price"),
         ("distance_to_entry", "To entry", "How far the close is from the trigger", "pct_plain"),
         ("risk_pct_of_entry", "Risk", "Entry minus stop, as a percent of entry", "pct_plain"),
         ("reward_to_risk", "R:R", "Reward-to-risk ratio", "num1"),
@@ -1066,9 +1131,12 @@ def render_summary(report: pd.DataFrame) -> str:
 
     turnover = total("transaction_value")
     flow = total("foreign_net_1d_idr")
-    setups = 0
-    if "setup" in report:
-        setups = int(report["setup"].fillna("").str.startswith(("Breakout", "Pullback")).sum())
+    candidates = at_trigger = pending = 0
+    if "setup_status" in report:
+        statuses = report["setup_status"].fillna("")
+        at_trigger = int((statuses == "At trigger").sum())
+        pending = int((statuses == "Pending").sum())
+        candidates = at_trigger + pending
     flow_days = None
     if "foreign_sessions_5d" in report:
         available = report["foreign_sessions_5d"].dropna()
@@ -1080,7 +1148,10 @@ def render_summary(report: pd.DataFrame) -> str:
             "Net foreign flow, 1 day",
             f"{'+' if (flow or 0) > 0 else ''}Rp {compact_rupiah(flow)}" if flow is not None else "&ndash;",
         ),
-        ("Setups triggered", f"{setups} of {len(report)}"),
+        (
+            "Setup candidates",
+            f"{candidates} · {at_trigger} at trigger · {pending} pending",
+        ),
         ("Foreign-flow coverage", f"{flow_days} of 5 sessions" if flow_days is not None else "Unavailable"),
     ]
     return "".join(
@@ -1112,8 +1183,9 @@ def save_reports(
     method_detail = (
         "Returns use adjusted Yahoo Finance closes. Indicators and trade levels use raw "
         "prices; foreign-flow rupiah values estimate IDX share flows at the day's VWAP. "
-        "Activity labels combine turnover, volume, price movement and foreign flow. "
-        "Trade scenarios use a days-to-weeks horizon."
+        "Activity and foreign-participation signals are shown separately. Pullbacks "
+        "require a rising regime, use stops below support, and cap targets at prior "
+        "resistance. Trade scenarios use a days-to-weeks horizon."
     )
 
     limit_parts = [

@@ -14,6 +14,7 @@ REPORTS_DIR = PROJECT_DIR / "reports"
 DASHBOARD = REPORTS_DIR / "dashboard.html"
 LATEST_REPORT = REPORTS_DIR / "latest_report.csv"
 LATEST_NEWS = REPORTS_DIR / "latest_news.csv"
+MIN_REWARD_TO_RISK = 1.5
 
 
 def read_rows(path: Path) -> list[dict[str, str]]:
@@ -54,6 +55,17 @@ def idx_tick_size(price: float) -> int:
 def valid_idx_price(price: float) -> bool:
     tick = idx_tick_size(price)
     return price > 0 and abs(price / tick - round(price / tick)) < 1e-9
+
+
+def boolean(row: dict[str, str], column: str) -> bool | None:
+    value = (row.get(column) or "").strip().lower()
+    if not value:
+        return None
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    raise SystemExit(f"{row.get('stock_code', '?')}: invalid boolean in {column}: {value!r}")
 
 
 def validate_report_row(row: dict[str, str]) -> None:
@@ -104,13 +116,19 @@ def validate_report_row(row: dict[str, str]) -> None:
 
     setup = row.get("setup") or ""
     if not setup.startswith(("Breakout", "Pullback")):
+        if (row.get("setup_status") or "").strip():
+            raise SystemExit(f"{code}: inactive setup unexpectedly has a status")
         return
 
     entry = numeric(row, "entry")
     stop = numeric(row, "stop")
     target = numeric(row, "target")
+    reported_rr = numeric(row, "reward_to_risk")
+    setup_status = (row.get("setup_status") or "").strip()
     if entry is None or stop is None or target is None:
         raise SystemExit(f"{code}: active setup is missing a trade level")
+    if reported_rr is None:
+        raise SystemExit(f"{code}: active setup is missing reward-to-risk")
 
     for label, price in (("entry", entry), ("stop", stop), ("target", target)):
         if not valid_idx_price(price):
@@ -119,8 +137,39 @@ def validate_report_row(row: dict[str, str]) -> None:
         raise SystemExit(f"{code}: stop must be below entry")
     if target <= entry:
         raise SystemExit(f"{code}: target must be above entry")
-    if (target - entry) / (entry - stop) < 2 - 1e-9:
-        raise SystemExit(f"{code}: reward-to-risk is below 2.0")
+    calculated_rr = (target - entry) / (entry - stop)
+    if abs(calculated_rr - reported_rr) > 1e-6:
+        raise SystemExit(f"{code}: reported reward-to-risk does not match rounded levels")
+    if calculated_rr < MIN_REWARD_TO_RISK - 1e-9:
+        raise SystemExit(
+            f"{code}: reward-to-risk is below {MIN_REWARD_TO_RISK:.1f}"
+        )
+
+    close = numeric(row, "close")
+    if close is None:
+        raise SystemExit(f"{code}: active setup is missing its close")
+    expected_status = "At trigger" if entry <= close else "Pending"
+    if setup_status != expected_status:
+        raise SystemExit(
+            f"{code}: setup status {setup_status!r} should be {expected_status!r}"
+        )
+
+    if setup.startswith("Pullback"):
+        support = numeric(row, "support_prior_20d")
+        resistance = numeric(row, "resistance_prior_20d")
+        ma20 = numeric(row, "ma20")
+        ma50 = numeric(row, "ma50")
+        ma20_rising = boolean(row, "ma20_rising")
+        if None in (support, resistance, ma20, ma50):
+            raise SystemExit(f"{code}: pullback is missing regime or level data")
+        assert support is not None and resistance is not None
+        assert ma20 is not None and ma50 is not None
+        if not (ma20 > ma50 and ma20_rising is True and close > ma50):
+            raise SystemExit(f"{code}: pullback lacks a confirmed rising regime")
+        if stop >= support:
+            raise SystemExit(f"{code}: pullback stop must sit below support")
+        if target > resistance:
+            raise SystemExit(f"{code}: pullback target exceeds prior resistance")
 
 
 def main() -> None:
