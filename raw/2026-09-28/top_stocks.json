@@ -1,0 +1,108 @@
+{
+  "report_date": "2026-09-28",
+  "ranking_source": "yfinance estimate",
+  "universe_size": 46,
+  "min_avg_value_20d": 5000000000,
+  "rows": [
+    {
+      "code": "BBCA",
+      "close": 6225.0,
+      "volume": 112107600,
+      "value": 697869810000,
+      "avg_value_20d": 752657294500.0,
+      "daily_change_pct": -0.40000000000000036,
+      "rank": 1,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BMRI",
+      "close": 4020.0,
+      "volume": 124768400,
+      "value": 501568968000,
+      "avg_value_20d": 578333273600.0,
+      "daily_change_pct": -1.4705882352941124,
+      "rank": 2,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BBRI",
+      "close": 3140.0,
+      "volume": 102848000,
+      "value": 322942720000,
+      "avg_value_20d": 611351243300.0,
+      "daily_change_pct": -0.31746031746031633,
+      "rank": 3,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "TLKM",
+      "close": 2370.0,
+      "volume": 131894200,
+      "value": 312589254000,
+      "avg_value_20d": 289505873950.0,
+      "daily_change_pct": -1.6597510373444035,
+      "rank": 4,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "CUAN",
+      "close": 910.0,
+      "volume": 315962400,
+      "value": 287525784000,
+      "avg_value_20d": 437392178450.0,
+      "daily_change_pct": -2.67379679144385,
+      "rank": 5,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BUMI",
+      "close": 180.0,
+      "volume": 1476778100,
+      "value": 265820058000,
+      "avg_value_20d": 678743355205.0,
+      "daily_change_pct": -1.098901098901095,
+      "rank": 6,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "AMMN",
+      "close": 4530.0,
+      "volume": 54709100,
+      "value": 247832223000,
+      "avg_value_20d": 411274432300.0,
+      "daily_change_pct": -4.02542372881356,
+      "rank": 7,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "ANTM",
+      "close": 3100.0,
+      "volume": 77533400,
+      "value": 240353540000,
+      "avg_value_20d": 365231783400.0,
+      "daily_change_pct": -4.024767801857587,
+      "rank": 8,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "TPIA",
+      "close": 1725.0,
+      "volume": 128777300,
+      "value": 222140842500,
+      "avg_value_20d": 263156105800.0,
+      "daily_change_pct": -4.1666666666666625,
+      "rank": 9,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "PTBA",
+      "close": 3180.0,
+      "volume": 60648500,
+      "value": 192862230000,
+      "avg_value_20d": 161654207850.0,
+      "daily_change_pct": 2.9126213592232997,
+      "rank": 10,
+      "value_source": "yfinance estimate (raw close x volume)"
+    }
+  ]
+}
