@@ -1,0 +1,108 @@
+{
+  "report_date": "2026-10-09",
+  "ranking_source": "yfinance estimate",
+  "universe_size": 46,
+  "min_avg_value_20d": 5000000000,
+  "rows": [
+    {
+      "code": "BBCA",
+      "close": 6050.0,
+      "volume": 87098600,
+      "value": 526946530000,
+      "avg_value_20d": 739730386125.0,
+      "daily_change_pct": 0.8333333333333304,
+      "rank": 1,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BBRI",
+      "close": 3100.0,
+      "volume": 155846800,
+      "value": 483125080000,
+      "avg_value_20d": 499499129350.0,
+      "daily_change_pct": 2.310231023102305,
+      "rank": 2,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "GOTO",
+      "close": 30.0,
+      "volume": 12917896800,
+      "value": 387536904000,
+      "avg_value_20d": 292092250850.0,
+      "daily_change_pct": 0.0,
+      "rank": 3,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "TLKM",
+      "close": 2320.0,
+      "volume": 166319300,
+      "value": 385860776000,
+      "avg_value_20d": 369680848550.0,
+      "daily_change_pct": 2.6548672566371723,
+      "rank": 4,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BUMI",
+      "close": 180.0,
+      "volume": 1695670400,
+      "value": 305220672000,
+      "avg_value_20d": 450595498605.0,
+      "daily_change_pct": 3.4482758620689724,
+      "rank": 5,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "AMMN",
+      "close": 4410.0,
+      "volume": 52189500,
+      "value": 230155695000,
+      "avg_value_20d": 407973448600.0,
+      "daily_change_pct": 4.009433962264142,
+      "rank": 6,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "BMRI",
+      "close": 4040.0,
+      "volume": 53448900,
+      "value": 215933556000,
+      "avg_value_20d": 496445005950.0,
+      "daily_change_pct": 1.0000000000000009,
+      "rank": 7,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "CUAN",
+      "close": 770.0,
+      "volume": 274141700,
+      "value": 211089109000,
+      "avg_value_20d": 292410644825.0,
+      "daily_change_pct": 0.6535947712418277,
+      "rank": 8,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "ASII",
+      "close": 4820.0,
+      "volume": 25070300,
+      "value": 120838846000,
+      "avg_value_20d": 189765611200.0,
+      "daily_change_pct": 0.4166666666666652,
+      "rank": 9,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "ANTM",
+      "close": 3180.0,
+      "volume": 37397500,
+      "value": 118924050000,
+      "avg_value_20d": 254365130200.0,
+      "daily_change_pct": 0.952380952380949,
+      "rank": 10,
+      "value_source": "yfinance estimate (raw close x volume)"
+    }
+  ]
+}
