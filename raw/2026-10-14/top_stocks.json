@@ -45,13 +45,23 @@
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
+      "code": "GOTO",
+      "close": 28.0,
+      "volume": 9369136400,
+      "value": 262335819200,
+      "avg_value_20d": 358314112355.0,
+      "daily_change_pct": 3.703703703703698,
+      "rank": 5,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
       "code": "BRPT",
       "close": 1430.0,
       "volume": 182930700,
       "value": 261590901000,
       "avg_value_20d": 84398597850.0,
       "daily_change_pct": 9.160305343511443,
-      "rank": 5,
+      "rank": 6,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -61,7 +71,7 @@
       "value": 253300229000,
       "avg_value_20d": 305247680200.0,
       "daily_change_pct": 0.0,
-      "rank": 6,
+      "rank": 7,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -71,7 +81,7 @@
       "value": 203875200000,
       "avg_value_20d": 186204122975.0,
       "daily_change_pct": -1.3157894736842146,
-      "rank": 7,
+      "rank": 8,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -81,7 +91,7 @@
       "value": 196109775000,
       "avg_value_20d": 361061005950.0,
       "daily_change_pct": 0.44642857142858094,
-      "rank": 8,
+      "rank": 9,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -91,16 +101,6 @@
       "value": 188133760000,
       "avg_value_20d": 217390558800.0,
       "daily_change_pct": -1.6129032258064502,
-      "rank": 9,
-      "value_source": "yfinance estimate (raw close x volume)"
-    },
-    {
-      "code": "ASII",
-      "close": 4810.0,
-      "volume": 34199000,
-      "value": 164497190000,
-      "avg_value_20d": 194507780350.0,
-      "daily_change_pct": 1.2631578947368327,
       "rank": 10,
       "value_source": "yfinance estimate (raw close x volume)"
     }
