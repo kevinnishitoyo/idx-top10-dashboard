@@ -17,9 +17,9 @@
     {
       "code": "BBRI",
       "close": 2640.0,
-      "volume": 1193916400,
-      "value": 3151939296000,
-      "avg_value_20d": 570952536800.0,
+      "volume": 1254239900,
+      "value": 3311193336000,
+      "avg_value_20d": 578915238800.0,
       "daily_change_pct": -14.83870967741936,
       "rank": 2,
       "value_source": "yfinance estimate (raw close x volume)"
@@ -27,9 +27,9 @@
     {
       "code": "BMRI",
       "close": 3390.0,
-      "volume": 785788400,
-      "value": 2663822676000,
-      "avg_value_20d": 541796391350.0,
+      "volume": 839063400,
+      "value": 2844424926000,
+      "avg_value_20d": 550826503850.0,
       "daily_change_pct": -14.824120603015079,
       "rank": 3,
       "value_source": "yfinance estimate (raw close x volume)"
@@ -37,11 +37,21 @@
     {
       "code": "TLKM",
       "close": 1900.0,
-      "volume": 963614200,
-      "value": 1830866980000,
-      "avg_value_20d": 430467407650.0,
+      "volume": 993589600,
+      "value": 1887820240000,
+      "avg_value_20d": 433315070650.0,
       "daily_change_pct": -14.798206278026903,
       "rank": 4,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
+      "code": "GOTO",
+      "close": 25.0,
+      "volume": 46128857900,
+      "value": 1153221447500,
+      "avg_value_20d": 423296065875.0,
+      "daily_change_pct": -7.4074074074074066,
+      "rank": 5,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -51,7 +61,7 @@
       "value": 716598036000,
       "avg_value_20d": 135106495300.0,
       "daily_change_pct": -12.903225806451612,
-      "rank": 5,
+      "rank": 6,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -61,7 +71,7 @@
       "value": 632229938000,
       "avg_value_20d": 213405288250.0,
       "daily_change_pct": -12.343096234309625,
-      "rank": 6,
+      "rank": 7,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -71,7 +81,7 @@
       "value": 551145780000,
       "avg_value_20d": 230674085900.0,
       "daily_change_pct": -14.715719063545151,
-      "rank": 7,
+      "rank": 8,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -81,26 +91,16 @@
       "value": 444810960000,
       "avg_value_20d": 102933765625.0,
       "daily_change_pct": -12.389380530973447,
-      "rank": 8,
+      "rank": 9,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
       "code": "PTBA",
       "close": 2800.0,
-      "volume": 138060600,
-      "value": 386569680000,
-      "avg_value_20d": 123965595900.0,
+      "volume": 141705700,
+      "value": 396775960000,
+      "avg_value_20d": 124475909900.0,
       "daily_change_pct": -12.772585669781932,
-      "rank": 9,
-      "value_source": "yfinance estimate (raw close x volume)"
-    },
-    {
-      "code": "ADRO",
-      "close": 2210.0,
-      "volume": 116082400,
-      "value": 256542104000,
-      "avg_value_20d": 91480295150.0,
-      "daily_change_pct": -10.162601626016265,
       "rank": 10,
       "value_source": "yfinance estimate (raw close x volume)"
     }
