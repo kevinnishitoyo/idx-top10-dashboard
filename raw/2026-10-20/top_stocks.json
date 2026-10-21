@@ -45,13 +45,23 @@
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
+      "code": "BUMI",
+      "close": 135.0,
+      "volume": 7632806300,
+      "value": 1030428850500,
+      "avg_value_20d": 359358107450.0,
+      "daily_change_pct": 8.000000000000007,
+      "rank": 5,
+      "value_source": "yfinance estimate (raw close x volume)"
+    },
+    {
       "code": "AMMN",
       "close": 3730.0,
       "volume": 165928900,
       "value": 618914797000,
       "avg_value_20d": 262051530950.0,
       "daily_change_pct": 7.183908045977017,
-      "rank": 5,
+      "rank": 6,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -61,7 +71,7 @@
       "value": 618914213500,
       "avg_value_20d": 290432603200.0,
       "daily_change_pct": 0.0,
-      "rank": 6,
+      "rank": 7,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -71,7 +81,7 @@
       "value": 556866832500,
       "avg_value_20d": 187921248075.0,
       "daily_change_pct": 13.33333333333333,
-      "rank": 7,
+      "rank": 8,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -81,7 +91,7 @@
       "value": 531259494500,
       "avg_value_20d": 105629738700.0,
       "daily_change_pct": 4.892966360856277,
-      "rank": 8,
+      "rank": 9,
       "value_source": "yfinance estimate (raw close x volume)"
     },
     {
@@ -91,16 +101,6 @@
       "value": 459004050000,
       "avg_value_20d": 244089027550.0,
       "daily_change_pct": 8.9588377723971,
-      "rank": 9,
-      "value_source": "yfinance estimate (raw close x volume)"
-    },
-    {
-      "code": "BUMI",
-      "close": 135.0,
-      "volume": 3337839004,
-      "value": 450608265540,
-      "avg_value_20d": 330367078202.0,
-      "daily_change_pct": 8.000000000000007,
       "rank": 10,
       "value_source": "yfinance estimate (raw close x volume)"
     }
