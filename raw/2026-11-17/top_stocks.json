@@ -1,0 +1,128 @@
+{
+  "report_date": "2026-11-17",
+  "ranking_source": "IDX Stock Summary (945 stocks on 2026-11-17)",
+  "universe_size": 46,
+  "min_avg_value_20d": 5000000000,
+  "rows": [
+    {
+      "rank": 1,
+      "code": "BBRI",
+      "close": 3100.0,
+      "volume": 326534500,
+      "value": 1025201941000,
+      "frequency": 48108,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Bank Rakyat Indonesia (Persero) Tbk."
+    },
+    {
+      "rank": 2,
+      "code": "BMRI",
+      "close": 3940.0,
+      "volume": 189390100,
+      "value": 750929544000,
+      "frequency": 27579,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Bank Mandiri (Persero) Tbk."
+    },
+    {
+      "rank": 3,
+      "code": "BBCA",
+      "close": 5500.0,
+      "volume": 126241800,
+      "value": 702289705000,
+      "frequency": 25778,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Bank Central Asia Tbk."
+    },
+    {
+      "rank": 4,
+      "code": "TLKM",
+      "close": 2180.0,
+      "volume": 205434800,
+      "value": 450757838000,
+      "frequency": 22627,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Telkom Indonesia (Persero) Tbk."
+    },
+    {
+      "rank": 5,
+      "code": "ASII",
+      "close": 5650.0,
+      "volume": 47746800,
+      "value": 273457660000,
+      "frequency": 11783,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Astra International Tbk."
+    },
+    {
+      "rank": 6,
+      "code": "BRPT",
+      "close": 710.0,
+      "volume": 337439400,
+      "value": 242388969500,
+      "frequency": 24297,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Barito Pacific Tbk."
+    },
+    {
+      "rank": 7,
+      "code": "BRMS",
+      "close": 304.0,
+      "volume": 676428700,
+      "value": 210145256600,
+      "frequency": 26770,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Bumi Resources Minerals Tbk."
+    },
+    {
+      "rank": 8,
+      "code": "AMMN",
+      "close": 3410.0,
+      "volume": 54721200,
+      "value": 188894203000,
+      "frequency": 13963,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Amman Mineral Internasional Tbk."
+    },
+    {
+      "rank": 9,
+      "code": "GOTO",
+      "close": 27.0,
+      "volume": 6972958800,
+      "value": 188547852000,
+      "frequency": 11807,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "GoTo Gojek Tokopedia Tbk."
+    },
+    {
+      "rank": 10,
+      "code": "BUMI",
+      "close": 131.0,
+      "volume": 1404071500,
+      "value": 184987005400,
+      "frequency": 23876,
+      "avg_value_20d": null,
+      "daily_change_pct": null,
+      "value_source": "IDX Stock Summary (official regular-market value)",
+      "company": "Bumi Resources Tbk."
+    }
+  ]
+}
